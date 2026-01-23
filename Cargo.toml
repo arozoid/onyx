@@ -1,6 +1,7 @@
 [package]
-name = "onyxbox"
+name = "onyx"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+time-format = "1.2.2"

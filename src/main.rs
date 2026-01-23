@@ -1,19 +1,37 @@
+mod lux;
+mod r#box;
+mod helpers;
+mod doctor;
+mod help;
+
+use crate::helpers::{errln, time_get, BLUE, DIM, ESC, RED};
+
 use std::env;
 use std::process;
 
+//=== cli ===//
 fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        eprintln!("Error: No command provided to extension.");
+        errln("core.onyx", "no command provided");
+        help::main();
         process::exit(1);
     }
 
     let command = &args[1];
 
     match command.as_str() {
+        "box" => {
+            r#box::cmd(args);
+        }
+        "doctor" => {
+            doctor::cmd(args);
+        }
         _ => {
-            println!("{}", "hello from .xeo extension!");
+            errln("onyx", &format!("unknown command: {}", command));
+            help::main();
+            process::exit(1);
         }
     }
 
