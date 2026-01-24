@@ -11,11 +11,12 @@ pub fn main() {
 
     // Core module list
     let core_modules = [
-        ("box", "Manage onyx boxes"),
-        ("doctor", "Diagnose onyx installation"),
+        ("box", "Manage Onyx boxes"),
+        ("profile", "Set performance profiles for Onyx boxes"),
+        ("doctor", "Diagnose Onyx installation"),
         ("help", "Show this help message"),
-        ("lux", "Manage onyx extensions and plugins"),
-        ("it", "Create onyx boxes from rootfs images"),
+        ("lux", "Manage Onyx extensions and plugins"),
+        ("it", "Build and create Onyx boxes from rootfs images"),
     ];
 
     // find longest name for padding
