@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+minreq = { version = "2.7", default-features = false, features = ["rustls"] }
+libc = "0.2"
 time-format = "1.2.2"

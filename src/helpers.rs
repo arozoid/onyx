@@ -4,6 +4,7 @@ pub const BLUE: &str = "\x1b[34m";
 pub const DIM: &str = "\x1b[2m";
 pub const ESC: &str = "\x1b[0m";
 pub const GREEN: &str = "\x1b[32m";
+pub const YELLOW: &str = "\x1b[33m";
 
 //=== helper funcs ===//
 pub fn time_get() -> String {

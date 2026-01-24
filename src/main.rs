@@ -26,7 +26,7 @@ fn main() {
             r#box::cmd(args);
         }
         "doctor" => {
-            doctor::cmd(args);
+            doctor::cmd();
         }
         _ => {
             errln("onyx", &format!("unknown command: {}", command));
