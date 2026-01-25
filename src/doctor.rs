@@ -82,9 +82,18 @@ fn parse_mem_line(line: &str) -> u64 {
         .unwrap_or(0)
 }
 
-fn get_kernel() -> String {
-    fs::read_to_string("/proc/version")
-        .unwrap_or_else(|_| "unknown".to_string())
+fn get_kernel() -> (Output, bool) {
+    let kernel = fs::read_to_string("/proc/version")
+        .unwrap_or_else(|_| "unknown".to_string());
+    if kernel == "unknown" {
+      let kernel = Command::new("uname")
+        .arg("-r")
+        .output()
+        .unwrap_or("unknown");
+      (kernel, false)
+    } else {
+      (kernel, true)
+    }
 }
 
 fn get_mem() -> (u64, u64) {
@@ -154,9 +163,13 @@ pub fn cmd() {
 
     // Linux kernel
     let kernel = get_kernel();
-    let kernel = kernel.replacen('(', "\x1b[2m(", 1);
+    if kernel.1 {
+      kernel.0 = kernel.0.replacen('(', "\x1b[2m(", 1);
+    } else {
+      kernel.0 = format!("Linux version {}", kernel.0);
+    }
 
-    let version_part = kernel.split_whitespace().nth(2).unwrap_or(""); 
+    let version_part = kernel.0.split_whitespace().nth(2).unwrap_or(""); 
     // cleanup "6.8.0-88-generic" to just "6.8.0"
     let version_num = version_part.split('-').next().unwrap_or("");
 
@@ -186,10 +199,10 @@ pub fn cmd() {
 
     println!("    {GREEN}[arch]{ESC} {arch}");
     if is_version_higher(version_num, target) {
-        print!("    {GREEN}[kernel]{ESC} {kernel}{ESC}");
+        print!("    {GREEN}[kernel]{ESC} {kernel.0}{ESC}");
         kv = true;
     } else {
-        print!("    {RED}[kernel]{ESC} {kernel}{ESC}");
+        print!("    {RED}[kernel]{ESC} {kernel.0}{ESC}");
         kv = false;
     }
 
