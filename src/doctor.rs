@@ -121,7 +121,7 @@ fn is_version_higher(current: &str, target: &str) -> bool {
 }
 
 fn check_latest_version() -> Option<String> {
-    let url = "https://raw.githubusercontent.com/arozoid/onyx/main/version.txt";
+    let url = "https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/version.txt";
     let resp = minreq::get(url).send().ok()?;
     if resp.status_code == 200 {
         Some(resp.as_str().ok()?.trim().to_string())
