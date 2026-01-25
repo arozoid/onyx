@@ -12,6 +12,7 @@ pub fn main() {
     // Core module list
     let core_modules = [
         ("box", "Manage Onyx boxes"),
+        ("update", "Update Onyx and its components to the latest version"),
         ("profile", "Set performance profiles for Onyx boxes"),
         ("doctor", "Diagnose Onyx installation"),
         ("help", "Show this help message"),

@@ -1,11 +1,11 @@
-use crate::helpers::{errln, time_get, BLUE, DIM, ESC, RED, GREEN, YELLOW};
+use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted};
 
 use std::fs;
-use minreq;
+use ureq;
 use std::process::Command;
 
 //=== variables ===//
-const VERSION: &str = "v0.1.0 build 26w04c";
+pub const VERSION: &str = "v0.1.0 build 26w04c";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
@@ -82,17 +82,18 @@ fn parse_mem_line(line: &str) -> u64 {
         .unwrap_or(0)
 }
 
-fn get_kernel() -> (Output, bool) {
-    let kernel = fs::read_to_string("/proc/version")
-        .unwrap_or_else(|_| "unknown".to_string());
-    if kernel == "unknown" {
-      let kernel = Command::new("uname")
-        .arg("-r")
-        .output()
-        .unwrap_or("unknown");
-      (kernel, false)
+fn get_kernel() -> (String, bool) {
+    let kernel = fs::read_to_string("/proc/version").unwrap_or_else(|_| "unknown".to_string());
+    if kernel.trim() == "unknown" {
+        // fallback to uname -r
+        let output = Command::new("uname")
+            .arg("-r")
+            .output()
+            .unwrap_or_else(|_| panic!("{RED}[doctor]{ESC} failed to execute uname"));
+        let kernel_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        (kernel_str, false)
     } else {
-      (kernel, true)
+        (kernel, true)
     }
 }
 
@@ -129,22 +130,10 @@ fn is_version_higher(current: &str, target: &str) -> bool {
     current_parts > target_parts
 }
 
-fn check_latest_version() -> Option<String> {
-    let url = "https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/version.txt";
-    let resp = minreq::get(url).send().ok()?;
-    if resp.status_code == 200 {
-        Some(resp.as_str().ok()?.trim().to_string())
-    } else {
-        None
-    }
-}
-
-fn check_file_exists(path: &str) -> bool {
-    fs::metadata(path).is_ok()
-}
-
 //=== cli ===//
-pub fn cmd() {
+pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
+    infoln("doctor", "fetching info");
+
     //=== system vars ===//
     // memory in MB
     let (used, total) = get_mem();
@@ -162,11 +151,12 @@ pub fn cmd() {
     let arch = String::from_utf8_lossy(&arch_output.stdout).trim().to_string();
 
     // Linux kernel
+    let kernelname;
     let kernel = get_kernel();
     if kernel.1 {
-      kernel.0 = kernel.0.replacen('(', "\x1b[2m(", 1);
+      kernelname = kernel.0.replacen('(', "\x1b[2m(", 1);
     } else {
-      kernel.0 = format!("Linux version {}", kernel.0);
+      kernelname = format!("Linux version {}", kernel.0);
     }
 
     let version_part = kernel.0.split_whitespace().nth(2).unwrap_or(""); 
@@ -176,7 +166,7 @@ pub fn cmd() {
     let target = "4.14";
 
     //=== software vars ===//
-    let latest_version = check_latest_version();
+    let latest_version = fetch("https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/version.txt");
     let latest_version = latest_version
         .as_deref()
         .unwrap_or("")
@@ -185,9 +175,9 @@ pub fn cmd() {
         .unwrap_or("")
         .trim();
 
-    let box64 = check_file_exists("/home/onyx/box64/");
-    let proot = check_file_exists("/home/onyx/proot/");
-    let glibc = check_file_exists("/home/onyx/glibc/");
+    let box64 = file_exists("/home/onyx/box64/");
+    let proot = file_exists("/home/onyx/proot/");
+    let glibc = file_exists("/home/onyx/glibc/");
 
     println!("{BLUE}[>== onyx doctor ==<]{ESC}");
 
@@ -199,10 +189,10 @@ pub fn cmd() {
 
     println!("    {GREEN}[arch]{ESC} {arch}");
     if is_version_higher(version_num, target) {
-        print!("    {GREEN}[kernel]{ESC} {kernel.0}{ESC}");
+        print!("    {GREEN}[kernel]{ESC} {kernelname}{ESC}");
         kv = true;
     } else {
-        print!("    {RED}[kernel]{ESC} {kernel.0}{ESC}");
+        print!("    {RED}[kernel]{ESC} {kernelname}{ESC}");
         kv = false;
     }
 
@@ -258,13 +248,7 @@ pub fn cmd() {
         println!("    {YELLOW}[onyx]{ESC} {VERSION} (latest: unknown)");
     }
 
-    let root;
-    let euid = unsafe { libc::geteuid() };
-    if euid == 0 {
-        root = true;
-    } else {
-        root = false;
-    }
+    let root = rooted();
     
     if root {
         println!("    {GREEN}[root]{ESC} running as root, chroot activated");
@@ -309,17 +293,35 @@ pub fn cmd() {
             println!("    you should be able to run boxes.");
         }
         (false, true, false) => {
-            println!("  {BLUE}✔ software setup missing box64{ESC}");
+            println!("  {BLUE}⚠ software setup missing box64{ESC}");
             println!("    only arm boxes will work.");
         }
         (false, false, false) | (true, false, true) => {
             println!("  {RED}✖ missing critical components{ESC}");
-            println!("    boxes may fail to run.");
+            println!("    proot is missing. boxes may fail to run.");
         }
-        _ => {
-            println!("  {YELLOW}⚠ incomplete software setup{ESC}");
-            println!("    some boxes may not work as expected.");
+        (true, true, false) => {
+            println!("  {BLUE}⚠ incomplete software setup{ESC}");
+            println!("    some boxes may not work as expected. install glibc to run box64.");
+        }
+        (false, true, true) => {
+            println!("  {BLUE}⚠ incomplete software setup{ESC}");
+            println!("    some boxes may not work as expected. install box64 to run x86_64 boxes.");
+        }
+    }
+
+    #[cfg(not(target_os = "android"))]
+    match (proot, root) {
+        (true, false) | (true, true) | (false, true) => {
+            println!("  {BLUE}✔ software setup looks good{ESC}");
+            println!("    you should be able to run boxes.");
+        }
+        (false, false) => {
+            println!("  {BLUE}⚠ root or proot access required{ESC}");
+            println!("    please run onyx as root to use boxes, or install proot");
         }
     }
     println!();
+
+    (kv, mv, root, box64, proot, glibc, arch, latest_version.to_string())
 }

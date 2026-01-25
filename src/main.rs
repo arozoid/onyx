@@ -3,8 +3,9 @@ mod r#box;
 mod helpers;
 mod doctor;
 mod help;
+mod update;
 
-use crate::helpers::{errln, time_get, BLUE, DIM, ESC, RED};
+use crate::helpers::{errln};
 
 use std::env;
 use std::process;
@@ -14,7 +15,7 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        errln("core.onyx", "no command provided");
+        errln("onyx", "no command provided");
         help::main();
         process::exit(1);
     }
@@ -26,7 +27,10 @@ fn main() {
             r#box::cmd(args);
         }
         "doctor" => {
-            doctor::cmd();
+            let _ = doctor::cmd();
+        }
+        "update" => {
+            update::cmd(args);
         }
         _ => {
             errln("onyx", &format!("unknown command: {}", command));
