@@ -16,7 +16,7 @@ fn read_u64(path: &Path) -> Option<u64> {
 
 fn detect_arch_factor() -> f64 {
     match std::env::consts::ARCH {
-        "x86" | "x86_64" => 0.75,
+        "x86" | "x86_64" => 0.9,
         "aarch64" => 1.0,
         _ => 1.0,
     }
@@ -92,7 +92,7 @@ pub fn cmd() -> (f64, f64) {
     let cores = read_cpu_cores();
 
     if cores.is_empty() {
-        errln("doctor", "panic! no cpu cores detected");
+        errln("doctor", "panic! no cpu cores detected! defaulting to apple pi");
         return (3.14159, 3.14159);
     }
 

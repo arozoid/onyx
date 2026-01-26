@@ -7,7 +7,7 @@ use ureq;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 (build 26w05a)";
+pub const VERSION: &str = "v0.1.0 (build 26w05b)";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
