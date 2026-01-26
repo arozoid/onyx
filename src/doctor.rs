@@ -1,3 +1,5 @@
+use crate::cpu;
+
 use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted};
 
 use std::fs;
@@ -5,7 +7,7 @@ use ureq;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 build 26w04c";
+pub const VERSION: &str = "v0.1.0 (build 26w05a)";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
@@ -89,7 +91,14 @@ fn get_kernel() -> (String, bool) {
         let output = Command::new("uname")
             .arg("-r")
             .output()
-            .unwrap_or_else(|_| panic!("{RED}[doctor]{ESC} failed to execute uname"));
+            .unwrap_or_else(|_| -> std::process::Output {
+              errln("doctor", "panic! failed to get kernel from any method! defaulting to 4.14");
+              let c = Command::new("echo")
+                .arg("4.14-??-generic (failed to fetch kernel)")
+                .output()
+                .unwrap();
+              c
+            });
         let kernel_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
         (kernel_str, false)
     } else {
@@ -139,14 +148,21 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     let (used, total) = get_mem();
     let used = used / 1024;
     let total = total / 1024;
+    
+    // CPU (onyx unit)
+    let (mcu, scu) = cpu::cmd();
 
     // Architecture
     let arch_output = Command::new("uname")
         .arg("-m")
         .output()
-        .unwrap_or_else(|_| {
-            errln("doctor", "failed to get system architecture");
-            std::process::exit(1);
+        .unwrap_or_else(|_| -> std::process::Output {
+            errln("doctor", "panic! failed to get system architecture! both '/proc/version' and 'uname' fetched an error! defaulting to aarch64");
+            let c = Command::new("echo")
+                .arg("aarch64")
+                .output()
+                .unwrap();
+            c
         });
     let arch = String::from_utf8_lossy(&arch_output.stdout).trim().to_string();
 
@@ -156,10 +172,10 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     if kernel.1 {
       kernelname = kernel.0.replacen('(', "\x1b[2m(", 1);
     } else {
-      kernelname = format!("Linux version {}", kernel.0);
+      kernelname = format!("Linux version {}\n", kernel.0);
     }
 
-    let version_part = kernel.0.split_whitespace().nth(2).unwrap_or(""); 
+    let version_part = kernelname.split_whitespace().nth(2).unwrap_or(""); 
     // cleanup "6.8.0-88-generic" to just "6.8.0"
     let version_num = version_part.split('-').next().unwrap_or("");
 
@@ -169,11 +185,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     let latest_version = fetch("https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/version.txt");
     let latest_version = latest_version
         .as_deref()
-        .unwrap_or("")
-        .split('(')
-        .next()
-        .unwrap_or("")
-        .trim();
+        .unwrap_or("");
 
     let box64 = file_exists("/home/onyx/box64/");
     let proot = file_exists("/home/onyx/proot/");
@@ -195,6 +207,8 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         print!("    {RED}[kernel]{ESC} {kernelname}{ESC}");
         kv = false;
     }
+    
+    println!("    {GREEN}[cpu]{ESC} mcu: {:.2} oU | scu: {:.2} oU (onyx units)", mcu, scu);
 
     if total >= 1024 {
         println!("    {GREEN}[memory]{ESC} {used} MB / {total} MB");
@@ -240,7 +254,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
 
     //=== software ===//
     println!("{BLUE}software:{ESC}");
-    if VERSION != latest_version && !latest_version.is_empty() {
+    if VERSION == latest_version {
         println!("    {GREEN}[onyx]{ESC} {VERSION} (latest)");
     } else if !latest_version.is_empty() {
         println!("    {YELLOW}[onyx]{ESC} {VERSION} (latest: {latest_version})");
@@ -256,14 +270,6 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         println!("    {YELLOW}[root]{ESC} non-root user, using proot");
     }
 
-    #[cfg(target_os = "android")]
-    if proot {
-        println!("    {GREEN}[proot]{ESC} installed");
-    } else {
-        println!("    {YELLOW}[proot]{ESC} not installed, onyx will not work");
-    }
-
-    #[cfg(not(target_os = "android"))]
     if proot {
         println!("    {GREEN}[proot]{ESC} installed");
     } else {
@@ -286,40 +292,40 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         println!("    {DIM}[glibc]{ESC} not required on x86_64");
     }
 
-    #[cfg(target_os = "android")]
-    match (box64, proot, glibc) {
-        (true, true, true) => {
-            println!("  {BLUE}✔ software setup looks good{ESC}");
-            println!("    you should be able to run boxes.");
-        }
-        (false, true, false) => {
-            println!("  {BLUE}⚠ software setup missing box64{ESC}");
-            println!("    only arm boxes will work.");
-        }
-        (false, false, false) | (true, false, true) => {
-            println!("  {RED}✖ missing critical components{ESC}");
-            println!("    proot is missing. boxes may fail to run.");
-        }
-        (true, true, false) => {
-            println!("  {BLUE}⚠ incomplete software setup{ESC}");
-            println!("    some boxes may not work as expected. install glibc to run box64.");
-        }
-        (false, true, true) => {
-            println!("  {BLUE}⚠ incomplete software setup{ESC}");
-            println!("    some boxes may not work as expected. install box64 to run x86_64 boxes.");
-        }
-    }
-
-    #[cfg(not(target_os = "android"))]
-    match (proot, root) {
-        (true, false) | (true, true) | (false, true) => {
-            println!("  {BLUE}✔ software setup looks good{ESC}");
-            println!("    you should be able to run boxes.");
-        }
-        (false, false) => {
-            println!("  {BLUE}⚠ root or proot access required{ESC}");
-            println!("    please run onyx as root to use boxes, or install proot");
-        }
+    if arch == "aarch64" {
+      match (box64, proot, glibc, root) {
+          (true, true, true, true) | (true, false, true, true) | (true, true, true, false) => {
+              println!("  {BLUE}✔ software setup looks good{ESC}");
+              println!("    you should be able to run boxes.");
+          }
+          (false, true, false, false) | (false, true, false, true) | (false, false, false, true) => {
+              println!("  {BLUE}⚠ software setup missing box64{ESC}");
+              println!("    only arm boxes will work.");
+          }
+          (false, false, false, false) | (true, false, true, false) | (false, false, true, false) | (true, false, false, false) => {
+              println!("  {RED}✖ missing critical components{ESC}");
+              println!("    proot is missing. boxes may fail to run.");
+          }
+          (true, true, false, true) | (true, true, false, false) | (true, false, false, true) => {
+              println!("  {BLUE}⚠ incomplete software setup{ESC}");
+              println!("    some boxes may not work as expected. install glibc to run x86_64 boxes.");
+          }
+          (false, true, true, true) | (false, true, true, false) | (false, false, true, true) => {
+              println!("  {BLUE}⚠ incomplete software setup{ESC}");
+              println!("    some boxes may not work as expected. install box64 to run x86_64 boxes.");
+          }
+      }
+    } else {
+      match (proot, root) {
+          (true, false) | (true, true) | (false, true) => {
+              println!("  {BLUE}✔ software setup looks good{ESC}");
+              println!("    you should be able to run boxes.");
+          }
+          (false, false) => {
+              println!("  {BLUE}⚠ root or proot access required{ESC}");
+              println!("    please run onyx as root to use boxes, or install proot");
+          }
+      }
     }
     println!();
 

@@ -4,6 +4,7 @@ mod helpers;
 mod doctor;
 mod help;
 mod update;
+mod cpu;
 
 use crate::helpers::{errln};
 

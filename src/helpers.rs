@@ -31,7 +31,7 @@ pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {
                 }
             }
         }
-        p
+        return p;
     }
     let p = PathBuf::from("/home/onyx");
     if rooted() && !file_exists(&p.to_str().unwrap()) {
