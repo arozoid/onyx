@@ -7,7 +7,7 @@ use ureq;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 (build 26w05b)";
+pub const VERSION: &str = "v0.1.0 (build 26w05c)";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
@@ -208,7 +208,17 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         kv = false;
     }
     
-    println!("    {GREEN}[cpu]{ESC} mcu: {:.2} oU | scu: {:.2} oU (onyx units)", mcu, scu);
+    let cpu_score = (scu * 3) + (mcu * 1);
+    
+    let (cpu_color, cpu_level) = if cpu_score >= 6.0 {
+        (GREEN, 2) // smooth & capable
+    } else if cpu_score >= 3.5 {
+        (YELLOW, 1) // usable but limited
+    } else {
+        (RED, 0) // sluggish
+    };
+    
+    println!("    {cpu_color}[cpu]{ESC} mcu: {:.2} oU | scu: {:.2} oU (onyx units)", mcu, scu);
 
     if total >= 1024 {
         println!("    {GREEN}[memory]{ESC} {used} MB / {total} MB");
@@ -221,33 +231,52 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         mv = 0;
     }
 
-    match (kv, mv) {
-        (true, 2) => {
+    match (kv, mv, cpu_level) {
+        // === ideal ===
+        (true, 2, 2) => {
             println!("  {BLUE}✔ system is well supported{ESC}");
+            println!("    strong cpu and memory available.");
             println!("    onyx should run boxes comfortably.");
         }
-        (true, 1) => {
+    
+        // === good but limited ===
+        (true, 1, 2) | (true, 2, 1) => {
             println!("  {BLUE}⚠ system is supported with limits{ESC}");
-            println!("    expect slower performance on heavier boxes.");
+            println!("    performance may dip under heavy workloads.");
         }
-        (true, 0) => {
-            println!("  {RED}✖ system is very constrained{ESC}");
+    
+        // === cpu bottleneck ===
+        (true, _, 0) => {
+            println!("  {YELLOW}⚠ cpu is weak{ESC}");
+            println!("    single-thread or heavy boxes may struggle.");
+        }
+    
+        // === memory bottleneck ===
+        (true, 0, _) => {
+            println!("  {RED}✖ system is memory constrained{ESC}");
             println!("    only minimal boxes are recommended.");
         }
-        (false, 2) => {
-            println!("  {BLUE}⚠ kernel is older than recommended{ESC}");
-            println!("    basic boxes may still work.");
+    
+        // === old kernel but usable ===
+        (false, 2, 2) => {
+            println!("  {YELLOW}⚠ kernel is older than recommended{ESC}");
+            println!("    cpu and memory are strong, but expect quirks.");
         }
-        (false, 1) => {
+    
+        // === mixed bad ===
+        (false, 1, _) | (false, _, 1) => {
             println!("  {RED}✖ limited support detected{ESC}");
-            println!("    older kernel and low memory may cause issues.");
+            println!("    older kernel or weak cpu may cause issues.");
         }
-        (false, 0) => {
+    
+        // === worst case ===
+        (false, 0, _) | (_, _, 0) => {
             println!("  {RED}✖ system is not recommended{ESC}");
             println!("    onyx may fail or behave unpredictably.");
         }
+        
         _ => {
-            println!("  {RED}✖ unknown system state{ESC}");
+            println!("  system report failed");
         }
     }
     println!();

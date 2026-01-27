@@ -5,7 +5,7 @@ use crate::helpers::{errln};
 
 #[derive(Debug)]
 struct CpuCore {
-    cur_khz: u64,
+    min_khz: u64,
     max_khz: u64,
     weight: f64,
 }
@@ -53,7 +53,7 @@ fn read_cpu_cores() -> Vec<CpuCore> {
             continue;
         }
 
-        let cur = read_u64(&freq_path.join("scaling_cur_freq"));
+        let cur = read_u64(&freq_path.join("scaling_min_freq"));
         let max = read_u64(&freq_path.join("scaling_max_freq"));
 
         let (cur, max) = match (cur, max) {
@@ -64,7 +64,7 @@ fn read_cpu_cores() -> Vec<CpuCore> {
         let weight = if is_big_core(max) { 1.8 } else { 1.0 };
 
         cores.push(CpuCore {
-            cur_khz: cur,
+            min_khz: cur,
             max_khz: max,
             weight,
         });
@@ -80,7 +80,7 @@ fn compute_onyx_units(cores: &[CpuCore]) -> (f64, f64) {
     let mut scu: f64 = 0.0;
 
     for c in cores {
-        let contrib = c.weight * (c.cur_khz as f64 / c.max_khz as f64);
+        let contrib = 1.1236 * c.weight * (c.min_khz as f64 / c.max_khz as f64);
         mcu += contrib;
         scu = scu.max(contrib);
     }
