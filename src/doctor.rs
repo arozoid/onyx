@@ -208,7 +208,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         kv = false;
     }
     
-    let cpu_score = (scu * 3) + (mcu * 1);
+    let cpu_score = (scu * (3 as f64)) + (mcu * (1 as f64));
     
     let (cpu_color, cpu_level) = if cpu_score >= 6.0 {
         (GREEN, 2) // smooth & capable
