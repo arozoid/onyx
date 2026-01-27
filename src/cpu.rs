@@ -80,7 +80,7 @@ fn compute_onyx_units(cores: &[CpuCore]) -> (f64, f64) {
     let mut scu: f64 = 0.0;
 
     for c in cores {
-        let contrib = 1.1236 * c.weight * (c.min_khz as f64 / c.max_khz as f64);
+        let contrib = 1.1236 * c.weight * (c.max_khz as f64 - c.min_khz as f64);
         mcu += contrib;
         scu = scu.max(contrib);
     }
