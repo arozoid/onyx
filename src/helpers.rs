@@ -10,12 +10,21 @@ use once_cell::sync::Lazy;
 use ureq::{Agent, Error};
 
 //=== variables ===//
+// normal
 pub const RED: &str = "\x1b[31m";
 pub const BLUE: &str = "\x1b[34m";
 pub const DIM: &str = "\x1b[2m";
 pub const ESC: &str = "\x1b[0m";
 pub const GREEN: &str = "\x1b[32m";
 pub const YELLOW: &str = "\x1b[33m";
+
+// bold
+pub const REDB: &str = "\x1b[1;31m";
+pub const BLUEB: &str = "\x1b[1;34m";
+pub const DIMB: &str = "\x1b[1;2m";
+pub const ESCB: &str = "\x1b[1;2m";
+pub const GREENB: &str = "\x1b[32m";
+pub const YELLOWB: &str = "\x1b[33m";
 
 /// global onyx dir in the user’s home
 pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {

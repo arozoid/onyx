@@ -1,13 +1,13 @@
 use crate::cpu;
 
-use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted};
+use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted, REDB, BLUEB, YELLOWB};
 
 use std::fs;
 use ureq;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 (build 26w05c)";
+pub const VERSION: &str = "v0.1.0 (build 26w05d)";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
@@ -191,16 +191,19 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     let proot = file_exists("/home/onyx/proot/");
     let glibc = file_exists("/home/onyx/glibc/");
 
-    println!("{BLUE}[>== onyx doctor ==<]{ESC}");
+    println!("{BLUEB}[>== onyx doctor ==<]{ESC}");
 
     //=== system ===//
-    println!("{BLUE}system:{ESC}");
+    println!("{BLUEB}system:{ESC}");
 
     let kv;
     let mv;
 
-    println!("    {GREEN}[arch]{ESC} {arch}");
-    if is_version_higher(version_num, target) {
+    println!("    {BLUE}[arch]{ESC} {arch}");
+    if is_version_higher(version_num, "5.15") {
+        print!("    {BLUE}[kernel]{ESC} {kernelname}{ESC}");
+        kv = true;
+    } else if is_version_higher(version_num, target) {
         print!("    {GREEN}[kernel]{ESC} {kernelname}{ESC}");
         kv = true;
     } else {
@@ -210,17 +213,22 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     
     let cpu_score = (scu * (3 as f64)) + (mcu * (1 as f64));
     
-    let (cpu_color, cpu_level) = if cpu_score >= 6.0 {
-        (GREEN, 2) // smooth & capable
-    } else if cpu_score >= 3.5 {
-        (YELLOW, 1) // usable but limited
+    let (cpu_color, cpu_level) = if cpu_score >= 50.0 {
+        (BLUE, 2) // great stuff
+    } else if cpu_score >= 25.0 {
+        (GREEN, 2) // smooth, capable
+    } else if cpu_score >= 10.0 {
+        (YELLOW, 1) // decent 
     } else {
         (RED, 0) // sluggish
     };
     
     println!("    {cpu_color}[cpu]{ESC} mcu: {:.2} oU | scu: {:.2} oU (onyx units)", mcu, scu);
 
-    if total >= 1024 {
+    if total >= 4096 {
+        println!("    {BLUE}[memory]{ESC} {used} MB / {total} MB");
+        mv = 2;
+    } else if total >= 2048 {
         println!("    {GREEN}[memory]{ESC} {used} MB / {total} MB");
         mv = 2;
     } else if total >= 512 {
@@ -234,44 +242,44 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     match (kv, mv, cpu_level) {
         // === ideal ===
         (true, 2, 2) => {
-            println!("  {BLUE}✔ system is well supported{ESC}");
+            println!("  {BLUEB}✔ system is well supported{ESC}");
             println!("    strong cpu and memory available.");
             println!("    onyx should run boxes comfortably.");
         }
     
         // === good but limited ===
         (true, 1, 2) | (true, 2, 1) => {
-            println!("  {BLUE}⚠ system is supported with limits{ESC}");
+            println!("  {BLUEB}⚠ system is supported with limits{ESC}");
             println!("    performance may dip under heavy workloads.");
         }
     
         // === cpu bottleneck ===
         (true, _, 0) => {
-            println!("  {YELLOW}⚠ cpu is weak{ESC}");
+            println!("  {BLUEB}⚠ cpu is weak{ESC}");
             println!("    single-thread or heavy boxes may struggle.");
         }
     
         // === memory bottleneck ===
         (true, 0, _) => {
-            println!("  {RED}✖ system is memory constrained{ESC}");
+            println!("  {BLUEB}✖ system is memory constrained{ESC}");
             println!("    only minimal boxes are recommended.");
         }
     
         // === old kernel but usable ===
         (false, 2, 2) => {
-            println!("  {YELLOW}⚠ kernel is older than recommended{ESC}");
+            println!("  {BLUEB}⚠ kernel is older than recommended{ESC}");
             println!("    cpu and memory are strong, but expect quirks.");
         }
     
         // === mixed bad ===
         (false, 1, _) | (false, _, 1) => {
-            println!("  {RED}✖ limited support detected{ESC}");
+            println!("  {BLUEB}✖ limited support detected{ESC}");
             println!("    older kernel or weak cpu may cause issues.");
         }
     
         // === worst case ===
         (false, 0, _) | (_, _, 0) => {
-            println!("  {RED}✖ system is not recommended{ESC}");
+            println!("  {BLUEB}✖ system is not recommended{ESC}");
             println!("    onyx may fail or behave unpredictably.");
         }
         
@@ -282,7 +290,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     println!();
 
     //=== software ===//
-    println!("{BLUE}software:{ESC}");
+    println!("{BLUEB}software:{ESC}");
     if VERSION == latest_version {
         println!("    {GREEN}[onyx]{ESC} {VERSION} (latest)");
     } else if !latest_version.is_empty() {
@@ -324,34 +332,34 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     if arch == "aarch64" {
       match (box64, proot, glibc, root) {
           (true, true, true, true) | (true, false, true, true) | (true, true, true, false) => {
-              println!("  {BLUE}✔ software setup looks good{ESC}");
+              println!("  {BLUEB}✔ software setup looks good{ESC}");
               println!("    you should be able to run boxes.");
           }
           (false, true, false, false) | (false, true, false, true) | (false, false, false, true) => {
-              println!("  {BLUE}⚠ software setup missing box64{ESC}");
+              println!("  {BLUEB}⚠ software setup missing box64{ESC}");
               println!("    only arm boxes will work.");
           }
           (false, false, false, false) | (true, false, true, false) | (false, false, true, false) | (true, false, false, false) => {
-              println!("  {RED}✖ missing critical components{ESC}");
+              println!("  {BLUEB}✖ missing critical components{ESC}");
               println!("    proot is missing. boxes may fail to run.");
           }
           (true, true, false, true) | (true, true, false, false) | (true, false, false, true) => {
-              println!("  {BLUE}⚠ incomplete software setup{ESC}");
+              println!("  {BLUEB}⚠ incomplete software setup{ESC}");
               println!("    some boxes may not work as expected. install glibc to run x86_64 boxes.");
           }
           (false, true, true, true) | (false, true, true, false) | (false, false, true, true) => {
-              println!("  {BLUE}⚠ incomplete software setup{ESC}");
+              println!("  {BLUEB}⚠ incomplete software setup{ESC}");
               println!("    some boxes may not work as expected. install box64 to run x86_64 boxes.");
           }
       }
     } else {
       match (proot, root) {
           (true, false) | (true, true) | (false, true) => {
-              println!("  {BLUE}✔ software setup looks good{ESC}");
+              println!("  {BLUEB}✔ software setup looks good{ESC}");
               println!("    you should be able to run boxes.");
           }
           (false, false) => {
-              println!("  {BLUE}⚠ root or proot access required{ESC}");
+              println!("  {BLUEB}⚠ root or proot access required{ESC}");
               println!("    please run onyx as root to use boxes, or install proot");
           }
       }
