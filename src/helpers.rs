@@ -4,6 +4,7 @@ use std::time::Duration;
 use std::path::PathBuf;
 use std::fs;
 use nix::unistd::Uid;
+use std::os::unix::fs::PermissionsExt;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
@@ -19,40 +20,49 @@ pub const GREEN: &str = "\x1b[32m";
 pub const YELLOW: &str = "\x1b[33m";
 
 // bold
-pub const REDB: &str = "\x1b[1;31m";
 pub const BLUEB: &str = "\x1b[1;34m";
-pub const DIMB: &str = "\x1b[1;2m";
-pub const ESCB: &str = "\x1b[1;2m";
-pub const GREENB: &str = "\x1b[32m";
-pub const YELLOWB: &str = "\x1b[33m";
 
 /// global onyx dir in the user’s home
 pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {
+    // determine base path
     #[cfg(target_os = "android")]
-    {
-        let p = PathBuf::from(std::env::var("HOME").unwrap()).join(".onyx");
-        if !file_exists(&p.to_str().unwrap()) {
-            match std::fs::create_dir_all(&p) {
-                Ok(_) => {}
-                Err(_) => {
-                    errln("onyx", "failed to create onyx directory (insufficient permissions)");
-                    std::process::exit(1);
-                }
-            }
-        }
+    let p = {
+        let home = std::env::var("HOME").unwrap_or("/data/data/com.termux/files/home".into());
+        PathBuf::from(home).join(".onyx")
+    };
+
+    #[cfg(not(target_os = "android"))]
+    let p = PathBuf::from("/home/onyx");
+
+    // if it already exists, just return it
+    if p.exists() {
         return p;
     }
-    let p = PathBuf::from("/home/onyx");
-    if rooted() && !file_exists(&p.to_str().unwrap()) {
-        std::fs::create_dir_all(&p).unwrap();
-        p
-    } else if file_exists(&p.to_str().unwrap()) {
-        p
-    } else {
-        errln("onyx", "failed to create onyx directory (insufficient permissions)");
+
+    // only create if it doesn't exist
+    if let Err(e) = fs::create_dir_all(&p) {
+        errln("onyx", &format!("failed to create {}: {}", p.display(), e));
         std::process::exit(1);
     }
+
+    // create standard subfolders
+    for folder in &["bin", "glibc", "box64", "sys", "tmp"] {
+        let sub = p.join(folder);
+        if let Err(e) = fs::create_dir_all(&sub) {
+            errln("onyx", &format!("failed to create {}: {}", sub.display(), e));
+            std::process::exit(1);
+        }
+    }
+
+    // make base folder world-readable/writable/executable
+    if let Ok(mut perms) = fs::metadata(&p).map(|m| m.permissions()) {
+        perms.set_mode(0o777);
+        let _ = fs::set_permissions(&p, perms);
+    }
+
+    p
 });
+
 
 //=== helper funcs ===//
 pub fn rooted() -> bool {

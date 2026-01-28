@@ -5,11 +5,13 @@ mod doctor;
 mod help;
 mod update;
 mod cpu;
+mod it;
 
 use crate::helpers::{errln};
 
 use std::env;
 use std::process;
+use std::path::Path;
 
 //=== cli ===//
 fn main() {
@@ -33,6 +35,23 @@ fn main() {
         "update" => {
             update::cmd(args);
         }
+        "help" => {
+            help::main();
+        }
+        // "it" => {
+        //     if args.len() < 4 {
+        //         errln("onyxit", "usage: onyx it <source> <name>");
+        //         errln("onyxit", "see 'onyx help it' for more info");
+        //         process::exit(1);
+        //     }
+
+        //     let src = &args[2];
+        //     let name = &args[3];
+        //     if let Err(e) = it::cmd(Path::new(&src), &name) {
+        //         errln("onyxit", &format!("failed to import system: {}", e));
+        //         process::exit(1);
+        //     }
+        // }
         _ => {
             errln("onyx", &format!("unknown command: {}", command));
             help::main();

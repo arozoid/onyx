@@ -1,13 +1,12 @@
 use crate::cpu;
 
-use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted, REDB, BLUEB, YELLOWB};
+use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted, BLUEB};
 
 use std::fs;
-use ureq;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 (build 26w05d)";
+pub const VERSION: &str = "v0.1.0 RC 1";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
@@ -188,7 +187,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
         .unwrap_or("");
 
     let box64 = file_exists("/home/onyx/box64/");
-    let proot = file_exists("/home/onyx/proot/");
+    let proot = file_exists("/home/onyx/bin/proot");
     let glibc = file_exists("/home/onyx/glibc/");
 
     println!("{BLUEB}[>== onyx doctor ==<]{ESC}");
