@@ -196,8 +196,10 @@ fn exec(args: Vec<String>) {
 
         infoln("box", format!("executing box command: {}", strcommand).as_str());
 
-        let mut cmd = Command::new(proot_bin);
-        cmd.arg("-r").arg(&sys_path)
+        let mut cmd = Command::new("env");
+        cmd.arg("-u").arg("LD_PRELOAD")
+        .arg(proot_bin)
+        .arg("-r").arg(&sys_path)
         .arg("-0")
         .arg("-b").arg("/dev")
         .arg("-b").arg("/proc")
@@ -271,17 +273,22 @@ fn open(args: Vec<String>) {
 
         let shell = find_shell(&sys_path);
         infoln("box", format!("entering box with {shell}").as_str());
-
+        
         let mut cmd = Command::new(proot_bin);
-        cmd.arg("-r").arg(&sys_path)
-        .arg("-0")
-        .arg("-b").arg("/dev")
-        .arg("-b").arg("/proc")
-        .arg("-b").arg("/sys")
-        .arg("-w").arg("/")
-        .arg(shell)
-        .status()
-        .expect("failed to run proot");
+        cmd
+            .arg("-r").arg(&sys_path)
+            .arg("-0")
+            .arg("-b").arg("/dev")
+            .arg("-b").arg("/proc")
+            .arg("-b").arg("/sys")
+            .arg("-w").arg("/")
+            .arg(shell)
+            // env handling
+            .env("PATH", "/usr/bin")
+            .env_remove("LD_PRELOAD")
+            .status()
+            .expect("failed to run proot");
+        
         infoln("box", "exited box");
         return;
     }
@@ -315,8 +322,15 @@ fn open(args: Vec<String>) {
 
     infoln("box", &format!("entering box with {}", shell));
 
-    match Command::new("chroot").arg(&sys_path).arg(shell).status() {
-        Ok(_) => {}, // shell finished, ignore exit code
+    match Command::new("chroot")
+        .arg(&sys_path)
+        .arg(shell)
+        // env isolation
+        .env("PATH", "/usr/bin")
+        .env_remove("LD_PRELOAD")
+        .status()
+    {
+        Ok(_) => {} // shell finished, ignore exit code
         Err(e) => errln("box", &format!("chroot failed: {}", e)),
     }
 

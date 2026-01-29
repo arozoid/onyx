@@ -6,7 +6,7 @@ use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 RC 1";
+pub const VERSION: &str = "v0.1.0 RC 2";
 
 // #[derive(Debug)]
 // pub struct CpuInfo {
