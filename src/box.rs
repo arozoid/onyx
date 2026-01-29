@@ -6,7 +6,8 @@ use std::time::{UNIX_EPOCH};
 use nix::sched::{self, CloneFlags};
 use dir_size;
 
-use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB};
+use crate::profile::{read_current_profile, load_profiles, Profile, MemoryConfig::{self, Unlimited, Percent, Fixed}, apply_profile_cpu};
+use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB, set_nice, set_memory_limit};
 
 //=== mount guard ===//
 struct MountGuard {
@@ -97,6 +98,32 @@ fn try_unshare_mount_ns() -> Result<(), String> {
 }
 
 //=== cli ===//
+fn limit_box() {
+    let backup = Profile {
+        name: "backup".to_string(),
+        description: Some("Temporary backup profile".to_string()),
+        nice: 0,
+        memory: MemoryConfig::Unlimited,
+        cpu: None,
+    };
+    let binding = load_profiles(ONYX_DIR.join("profiles").as_path()).expect("failed to fetch profiles");
+    let profile = binding.get(read_current_profile().unwrap().as_str()).unwrap_or(&backup);
+
+    apply_profile_cpu(profile);
+
+    let _ = set_nice(profile.nice);
+    match profile.memory {
+        Unlimited => {}
+        Percent{value} => {
+            let limit = crate::doctor::get_mem().1 * value as u64 / 100;
+            let _ = set_memory_limit(limit * 1024 * 1024);
+        }
+        Fixed{mb} => {
+            let _ = set_memory_limit(mb * 1024 * 1024);
+        }
+    }
+}
+
 pub fn cmd(args: Vec<String>) {
     match args[2].as_str() {
         "open" => {
@@ -182,6 +209,8 @@ fn exec(args: Vec<String>) {
         return;
     }
 
+    limit_box();
+
     if !rooted() {
         infoln("box", "running as normal user via proot");
 
@@ -261,6 +290,8 @@ fn open(args: Vec<String>) {
         errln("box", "system not found");
         return;
     }
+
+    limit_box();
 
     if !rooted() {
         infoln("box", "running as normal user via proot");

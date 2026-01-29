@@ -1,7 +1,7 @@
 use crate::helpers::{BLUE, BLUEB, DIM, ESC, errln, time_get};
 use crate::lux::ext::list_help;
 
-fn make_help(header: &str, options: Vec<(&str, &str)>) {
+pub fn make_help(header: &str, options: Vec<(String, String)>) {
     // header
     println!("{BLUEB}{header}{ESC}");
 
@@ -30,10 +30,10 @@ fn sub_cmd(args: Vec<String>) {
     match args[2].as_str() {
         "box" => {
             let r#box = vec![
-                ("create <name> <rootfs-folder>", "Create a new Onyx box"),
-                ("delete <name>", "Delete an existing Onyx box"),
-                ("open <name>", "Open an Onyx box in the terminal"),
-                ("list", "List all existing Onyx boxes"),
+                ("create <name> <rootfs-folder>".to_string(), "Create a new Onyx box".to_string()),
+                ("delete <name>".to_string(), "Delete an existing Onyx box".to_string()),
+                ("open <name>".to_string(), "Open an Onyx box in the terminal".to_string()),
+                ("list".to_string(), "List all existing Onyx boxes".to_string()),
             ];
             make_help("Box Modules:", r#box);
         }
@@ -69,11 +69,11 @@ pub fn cmd(args: Vec<String>) {
 
     // Core module list
     let core_modules = vec![
-        ("box", "Manage Onyx boxes"),
-        ("update", "Update Onyx and its components to the latest version"),
-        ("profile", "Set performance profiles for Onyx boxes"),
-        ("doctor", "Diagnose Onyx installation"),
-        ("help", "Show this help message"),
+        ("box".to_string(), "Manage Onyx boxes".to_string()),
+        ("update".to_string(), "Update Onyx and its components to the latest version".to_string()),
+        ("profile".to_string(), "Set performance profiles for Onyx boxes".to_string()),
+        ("doctor".to_string(), "Diagnose Onyx installation".to_string()),
+        ("help".to_string(), "Show this help message".to_string()),
         // ("lux", "Manage Onyx extensions and plugins"),
     ];
 
@@ -83,7 +83,7 @@ pub fn cmd(args: Vec<String>) {
     // User modules (lux extensions)
     let ext_cmds = list_help();
     if !ext_cmds.is_empty() {
-        make_help("User Modules:", ext_cmds.iter().map(|(n, d)| (n.as_str(), d.as_str())).collect());
+        make_help("User Modules:", ext_cmds);
         println!();
     }
 

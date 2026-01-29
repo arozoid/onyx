@@ -1,10 +1,70 @@
-use crate::helpers::{errln, infoln, ONYX_DIR};
+use crate::helpers::{errln, infoln, ONYX_DIR, pin_cpu, BLUE, ESC, BLUEB, GREEN, RED, YELLOW};
 use serde::Deserialize;
 use std::{
     collections::HashMap,
     fs,
-    path::{Path, PathBuf},
+    path::{Path},
 };
+
+fn prof_table() {
+
+    let profiles = load_profiles(&ONYX_DIR.join("profiles")).unwrap();
+
+    // column widths
+    let name_w = 12;
+    let mem_w  = 10;
+    let cpu_w  = 8;
+    let nice_w = 4;
+
+    // header
+    println!(
+        "{BLUEB}{:<name_w$} {:<mem_w$} {:<cpu_w$} {:<nice_w$}{ESC}",
+        "name", "memory", "cpu", "nice",
+        name_w = name_w,
+        mem_w = mem_w,
+        cpu_w = cpu_w,
+        nice_w = nice_w,
+    );
+
+    println!("{}", "==".repeat(name_w + mem_w + cpu_w + nice_w + 5));
+
+    // rows
+    for p in profiles.values() {
+        let mem_color = match p.memory_severity() {
+            0 => GREEN,
+            1 => YELLOW,
+            _ => RED,
+        };
+
+        let cpu_color = match &p.cpu {
+            None => GREEN,
+            Some(cpu) if cpu.cores >= 2 => YELLOW,
+            _ => RED,
+        };
+
+        let nice_color = match p.nice {
+            0..=5  => GREEN,
+            6..=15 => YELLOW,
+            _      => RED,
+        };
+
+        println!(
+            "{BLUE}{:<name_w$}{ESC} \
+            {mem_color}{:<mem_w$}{ESC} \
+            {cpu_color}{:<cpu_w$}{ESC} \
+            {nice_color}{:<nice_w$}{ESC}    {}",
+            p.name,
+            p.memory_display(),
+            p.cpu_display(),
+            p.nice,
+            p.description.as_deref().unwrap_or(""),
+            name_w = name_w,
+            mem_w = mem_w,
+            cpu_w = cpu_w,
+            nice_w = nice_w,
+        );
+    }
+}
 
 pub fn load_profiles(dir: &Path) -> std::io::Result<HashMap<String, Profile>> {
     let mut profiles = HashMap::new();
@@ -30,6 +90,24 @@ pub fn load_profiles(dir: &Path) -> std::io::Result<HashMap<String, Profile>> {
     Ok(profiles)
 }
 
+pub fn read_current_profile() -> Option<String> {
+    let path = ONYX_DIR.join("current-profile");
+    std::fs::read_to_string(path).ok().map(|s| s.trim().to_string())
+}
+
+pub fn apply_profile_cpu(profile: &Profile) {
+    if let Some(cpu) = &profile.cpu {
+        // pin to first N cores
+        let cores: Vec<usize> = (0..cpu.cores).collect();
+        if let Err(e) = pin_cpu(&cores) {
+            eprintln!("warning: failed to pin CPU cores: {}", e);
+        } else {
+            println!("CPU pinned to cores: {:?}", cores);
+        }
+    } else {
+        println!("No CPU pinning set for this profile");
+    }
+}
 
 #[derive(Debug, Deserialize)]
 pub struct Profile {
@@ -38,6 +116,33 @@ pub struct Profile {
     pub nice: i32,
     pub memory: MemoryConfig,
     pub cpu: Option<CpuConfig>,
+}
+
+impl Profile {
+    fn memory_display(&self) -> String {
+        match self.memory {
+            MemoryConfig::Unlimited => "unlimited".into(),
+            MemoryConfig::Percent { value: p } => format!("{p}% RAM"),
+            MemoryConfig::Fixed { mb } => format!("{mb} MB"),
+        }
+    }
+
+    fn cpu_display(&self) -> String {
+        match &self.cpu {
+            None => "all".into(),
+            Some(n) => n.cores.to_string(),
+        }
+    }
+
+    fn memory_severity(&self) -> u8 {
+        match self.memory {
+            MemoryConfig::Unlimited => 0,
+            MemoryConfig::Percent { value: p } if p >= 60 => 0,
+            MemoryConfig::Percent { value: p } if p >= 30 => 1,
+            MemoryConfig::Fixed { mb } if mb >= 512 => 1,
+            _ => 2,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -59,23 +164,38 @@ pub struct CpuConfig {
 }
 
 pub fn cmd(args: Vec<String>) {
-    if args.len() < 2 {
+    if args.len() < 3 {
         errln("profile", "no subcommand provided");
         errln("profile", "see 'onyx help profile' for usage");
+        return;
     }
 
     match args[2].as_str() {
         "list" => {
             // list performance profiles
             infoln("profile", "listing performance profiles...");
-            let profiles = load_profiles(&ONYX_DIR.join("profiles")).unwrap();
-            for profile in profiles.values() {
-                println!("{}", profile.name);
-            }
+            println!("{BLUEB}[>== profiles ==<]{ESC}");
+            prof_table();
         }
         "use" => {
             // use a performance profile
-            infoln("profile", format!("choosing '{}' performance profile...", args[3]).as_str()); 
+            if args.len() < 4 {
+                errln("profile", "no profile name provided");
+                errln("profile", "see 'onyx help profile' for usage");
+                return;
+            }
+
+            let profiles = load_profiles(&ONYX_DIR.join("profiles")).unwrap();
+            if !profiles.contains_key(&args[3]) {
+                errln("profile", &format!("profile '{}' does not exist", args[3]));
+                return;
+            }
+
+            if let Err(e) = fs::write(ONYX_DIR.join("current-profile"), args[3].clone()) {
+                errln("profile", &format!("failed to set profile: {}", e));
+                return;
+            }
+            infoln("profile", format!("chose '{}' performance profile.", args[3]).as_str());
         }
         _ => {
             errln("profile", "unknown subcommand");

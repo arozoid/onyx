@@ -9,7 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
 use ureq::{Agent, Error};
-use libc::{rlimit, RLIMIT_AS, setrlimit};
+use libc::{rlimit, RLIMIT_AS, setrlimit, cpu_set_t, sched_setaffinity, CPU_SET, CPU_ZERO};
 
 //=== variables ===//
 // normal
@@ -55,6 +55,11 @@ pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {
         }
     }
 
+    if let Err(e) = fs::File::create(p.join("current-profile")) {
+        errln("onyx", &format!("failed to create current-profile: {}", e));
+        std::process::exit(1);
+    }
+
     // make base folder world-readable/writable/executable
     if let Ok(mut perms) = fs::metadata(&p).map(|m| m.permissions()) {
         perms.set_mode(0o777);
@@ -82,16 +87,41 @@ pub fn set_nice(nice_level: i32) -> io::Result<()> {
     }
 }
 
-pub fn set_memory_limit_kb(kb: u64) -> Result<(), std::io::Error> {
+pub fn set_memory_limit(bytes: u64) -> Result<(), std::io::Error> {
     let limit = rlimit {
-        rlim_cur: kb,
-        rlim_max: kb,
+        rlim_cur: bytes,
+        rlim_max: bytes,
     };
     let res = unsafe { setrlimit(RLIMIT_AS, &limit) }; // RLIMIT_AS limits virtual memory
     if res == 0 {
         Ok(())
     } else {
         Err(std::io::Error::last_os_error())
+    }
+}
+
+/// pin the current process to `cores`
+/// `cores` is a slice of CPU indexes, e.g. &[0,1]
+pub fn pin_cpu(cores: &[usize]) -> io::Result<()> {
+    if cores.is_empty() {
+        return Ok(()); // no pinning requested
+    }
+
+    let mut set = unsafe { std::mem::zeroed::<cpu_set_t>() };
+    unsafe { CPU_ZERO(&mut set) };
+
+    for &core in cores {
+        unsafe { CPU_SET(core, &mut set) };
+    }
+
+    let pid = 0; // 0 = current thread
+    let size = std::mem::size_of::<cpu_set_t>();
+
+    let res = unsafe { sched_setaffinity(pid, size, &set) };
+    if res != 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        Ok(())
     }
 }
 

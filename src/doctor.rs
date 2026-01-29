@@ -6,7 +6,7 @@ use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 RC 3";
+pub const VERSION: &str = "v0.1.0 RC 4";
 
 //=== helpers ===//
 fn parse_mem_line(line: &str) -> u64 {
@@ -38,7 +38,7 @@ fn get_kernel() -> (String, bool) {
     }
 }
 
-fn get_mem() -> (u64, u64) {
+pub fn get_mem() -> (u64, u64) {
     let contents = fs::read_to_string("/proc/meminfo")
         .expect("couldn't read meminfo. are you on linux?");
 
