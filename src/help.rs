@@ -1,42 +1,89 @@
-use crate::helpers::{BLUE, DIM, ESC};
+use crate::helpers::{BLUE, BLUEB, DIM, ESC, errln, time_get};
 use crate::lux::ext::list_help;
 
-pub fn main() {
+fn make_help(header: &str, options: Vec<(&str, &str)>) {
     // header
-    println!("{BLUE}[onyx]{ESC} v0.1 {DIM}(26w04a){ESC}");
+    println!("{BLUEB}{header}{ESC}");
+
+    // find longest option for padding
+    let max_len = options.iter().map(|(opt, _)| opt.len()).max().unwrap_or(0);
+
+    for (opt, desc) in options.iter() {
+        // split opt into first word and rest
+        let mut parts = opt.splitn(2, ' ');
+        let first = parts.next().unwrap_or("");
+        let rest = parts.next().unwrap_or("");
+
+        if rest.is_empty() {
+            // no space in opt
+            println!("  {first:<width$}  {DIM}{desc}{ESC}", width = max_len + 2);
+        } else {
+            // space exists, print first normally, rest in blue
+            let colored_opt = format!("{first} {BLUE}{rest}{ESC}");
+            println!("  {colored_opt:<width$}  {DIM}{desc}{ESC}", width = max_len + 2);
+        }
+    }
+}
+
+
+fn sub_cmd(args: Vec<String>) {
+    match args[2].as_str() {
+        "box" => {
+            let r#box = vec![
+                ("create <name> <rootfs-folder>", "Create a new Onyx box"),
+                ("delete <name>", "Delete an existing Onyx box"),
+                ("open <name>", "Open an Onyx box in the terminal"),
+                ("list", "List all existing Onyx boxes"),
+            ];
+            make_help("Box Modules:", r#box);
+        }
+        "update" => {
+            
+        }
+        "profile" => {
+            
+        }
+        "doctor" => {
+            
+        }
+        "help" => {
+
+        }
+        _ => {
+            errln("onyx", format!("unknown module: {} {DIM}[{}]{ESC}", args[1], time_get()).as_str());
+        }
+    }
+}
+
+pub fn cmd(args: Vec<String>) {
+    // header 1
+    println!("{BLUE}[onyx]{ESC} v0.1.0 {DIM}(RC 2){ESC}");
+
+    if args.len() > 2 {
+        sub_cmd(args);
+        return;
+    }
+
+    // header 2
     println!("{BLUE}usage:{ESC} onyx <module> <command> [options]\n");
 
-    // Core modules
-    println!("{BLUE}Modules:{ESC}");
-
     // Core module list
-    let core_modules = [
+    let core_modules = vec![
         ("box", "Manage Onyx boxes"),
         ("update", "Update Onyx and its components to the latest version"),
         ("profile", "Set performance profiles for Onyx boxes"),
         ("doctor", "Diagnose Onyx installation"),
         ("help", "Show this help message"),
-        ("lux", "Manage Onyx extensions and plugins"),
-        ("it", "Build and create Onyx boxes from rootfs images"),
+        // ("lux", "Manage Onyx extensions and plugins"),
     ];
 
-    // find longest name for padding
-    let max_len = core_modules.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
-
-    for (name, desc) in core_modules.iter() {
-        println!("  {name:<width$}  {DIM}{desc}{ESC}", width = max_len + 2);
-    }
+    make_help("Core Modules:", core_modules);
     println!();
 
     // User modules (lux extensions)
     let ext_cmds = list_help();
     if !ext_cmds.is_empty() {
-        println!("{BLUE}User Modules:{ESC}");
-        let max_len_ext = ext_cmds.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
-
-        for (name, desc) in ext_cmds.iter() {
-            println!("  {name:<width$}  {DIM}{desc}{ESC}", width = max_len_ext + 2);
-        }
+        make_help("User Modules:", ext_cmds.iter().map(|(n, d)| (n.as_str(), d.as_str())).collect());
         println!();
     }
 

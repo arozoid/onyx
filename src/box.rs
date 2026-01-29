@@ -322,11 +322,24 @@ fn open(args: Vec<String>) {
 
     infoln("box", &format!("entering box with {}", shell));
 
+    #[cfg(target_os = "android")]
     match Command::new("chroot")
         .arg(&sys_path)
         .arg(shell)
         // env isolation
         .env("PATH", "/usr/bin")
+        .env_remove("LD_PRELOAD")
+        .status()
+    {
+        Ok(_) => {} // shell finished, ignore exit code
+        Err(e) => errln("box", &format!("chroot failed: {}", e)),
+    }
+
+    #[cfg(not(target_os = "android"))]
+    match Command::new("chroot")
+        .arg(&sys_path)
+        .arg(shell)
+        // env isolation
         .env_remove("LD_PRELOAD")
         .status()
     {

@@ -9,6 +9,7 @@ use std::os::unix::fs::PermissionsExt;
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
 use ureq::{Agent, Error};
+use libc::{rlimit, RLIMIT_AS, setrlimit};
 
 //=== variables ===//
 // normal
@@ -46,7 +47,7 @@ pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {
     }
 
     // create standard subfolders
-    for folder in &["bin", "glibc", "box64", "sys", "tmp"] {
+    for folder in &["bin/core", "glibc", "box64", "sys", "tmp", "profiles"] {
         let sub = p.join(folder);
         if let Err(e) = fs::create_dir_all(&sub) {
             errln("onyx", &format!("failed to create {}: {}", sub.display(), e));
@@ -63,8 +64,37 @@ pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {
     p
 });
 
-
 //=== helper funcs ===//
+pub fn set_nice(nice_level: i32) -> io::Result<()> {
+    // unsafe because nice is a libc syscall
+    let prev = unsafe { libc::nice(nice_level) };
+    if prev == -1 {
+        // could be error
+        let err = io::Error::last_os_error();
+        if err.raw_os_error() == Some(0) {
+            // on some systems -1 can be valid previous nice
+            Ok(())
+        } else {
+            Err(err)
+        }
+    } else {
+        Ok(())
+    }
+}
+
+pub fn set_memory_limit_kb(kb: u64) -> Result<(), std::io::Error> {
+    let limit = rlimit {
+        rlim_cur: kb,
+        rlim_max: kb,
+    };
+    let res = unsafe { setrlimit(RLIMIT_AS, &limit) }; // RLIMIT_AS limits virtual memory
+    if res == 0 {
+        Ok(())
+    } else {
+        Err(std::io::Error::last_os_error())
+    }
+}
+
 pub fn rooted() -> bool {
     Uid::effective().is_root()
 }

@@ -5,12 +5,12 @@ mod doctor;
 mod help;
 mod update;
 mod cpu;
+mod profile;
 
 use crate::helpers::{errln};
 
 use std::env;
 use std::process;
-use std::path::Path;
 
 //=== cli ===//
 fn main() {
@@ -18,7 +18,7 @@ fn main() {
 
     if args.len() < 2 {
         errln("onyx", "no command provided");
-        help::main();
+        help::cmd(args);
         process::exit(1);
     }
 
@@ -35,25 +35,14 @@ fn main() {
             update::cmd(args);
         }
         "help" => {
-            help::main();
+            help::cmd(args);
         }
-        // "it" => {
-        //     if args.len() < 4 {
-        //         errln("onyxit", "usage: onyx it <source> <name>");
-        //         errln("onyxit", "see 'onyx help it' for more info");
-        //         process::exit(1);
-        //     }
-
-        //     let src = &args[2];
-        //     let name = &args[3];
-        //     if let Err(e) = it::cmd(Path::new(&src), &name) {
-        //         errln("onyxit", &format!("failed to import system: {}", e));
-        //         process::exit(1);
-        //     }
-        // }
+        "profile" => {
+            profile::cmd(args);
+        }
         _ => {
             errln("onyx", &format!("unknown command: {}", command));
-            help::main();
+            help::cmd(args);
             process::exit(1);
         }
     }

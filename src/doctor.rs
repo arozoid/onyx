@@ -6,74 +6,7 @@ use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 RC 2";
-
-// #[derive(Debug)]
-// pub struct CpuInfo {
-//     arch: &'static str,
-//     vendor: &'static str,
-//     note: Option<&'static str>,
-// }
-
-// pub const CPU_LIST: &[CpuInfo] = &[
-//     // --- ARM64 / aarch64 ---
-//     CpuInfo { arch: "aarch64", vendor: "aarch64", note: Some("Generic ARM64") },
-//     CpuInfo { arch: "aarch64", vendor: "arm64", note: Some("Alternative ARM64 name") },
-//     CpuInfo { arch: "aarch64", vendor: "armv8", note: Some("ARMv8 generic") },
-//     CpuInfo { arch: "aarch64", vendor: "armv8l", note: Some("ARMv8 little-endian") },
-
-//     // Cortex cores (SBCs, Raspberry Pi)
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a53", note: Some("RPi 3 / small SBC core") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a55", note: Some("RPi 4 / efficiency core") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a57", note: Some("High-end SBC") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a72", note: Some("RPi 4 / high-performance SBC") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a73", note: Some("High-end ARM board") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a75", note: Some("Server / mobile cores") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a76", note: Some("Recent ARM laptop/server") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a77", note: Some("Recent ARM laptop/server") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-a78", note: Some("High-performance cores") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-x1", note: Some("Premium ARM cores") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-x2", note: Some("Premium ARM cores") },
-//     CpuInfo { arch: "aarch64", vendor: "cortex-x3", note: Some("Premium ARM cores") },
-
-//     // ARM server
-//     CpuInfo { arch: "aarch64", vendor: "neoverse-n1", note: Some("Server / cloud CPUs") },
-//     CpuInfo { arch: "aarch64", vendor: "neoverse-n2", note: Some("Server / cloud CPUs") },
-//     CpuInfo { arch: "aarch64", vendor: "neoverse-v1", note: Some("Server / cloud CPUs") },
-
-//     // Android / mobile SoCs
-//     CpuInfo { arch: "aarch64", vendor: "kirin", note: Some("Huawei SoCs") },
-//     CpuInfo { arch: "aarch64", vendor: "exynos", note: Some("Samsung SoCs") },
-//     CpuInfo { arch: "aarch64", vendor: "snapdragon", note: Some("Qualcomm SoCs") },
-//     CpuInfo { arch: "aarch64", vendor: "mediatek", note: Some("MediaTek SoCs") },
-//     CpuInfo { arch: "aarch64", vendor: "rockchip", note: Some("Rockchip SBCs") },
-//     CpuInfo { arch: "aarch64", vendor: "allwinner", note: Some("Allwinner SoCs") },
-
-//     // Apple Silicon
-//     CpuInfo { arch: "aarch64", vendor: "apple", note: Some("Apple M1/M2") },
-//     CpuInfo { arch: "aarch64", vendor: "m1", note: Some("Apple M1") },
-//     CpuInfo { arch: "aarch64", vendor: "m2", note: Some("Apple M2") },
-//     CpuInfo { arch: "aarch64", vendor: "m3", note: Some("Apple M3") },
-//     CpuInfo { arch: "aarch64", vendor: "m4", note: Some("Apple M4") },
-//     CpuInfo { arch: "aarch64", vendor: "m5", note: Some("Apple M5") },
-
-//     // --- x86_64 CPUs ---
-//     CpuInfo { arch: "x86_64", vendor: "x86_64", note: Some("Generic 64-bit Intel/AMD") },
-//     CpuInfo { arch: "x86_64", vendor: "intel", note: Some("Intel CPU") },
-//     CpuInfo { arch: "x86_64", vendor: "amd", note: Some("AMD CPU") },
-//     CpuInfo { arch: "x86_64", vendor: "core2", note: Some("Intel Core 2") },
-//     CpuInfo { arch: "x86_64", vendor: "nehalem", note: Some("Intel Nehalem") },
-//     CpuInfo { arch: "x86_64", vendor: "sandybridge", note: Some("Intel Sandy Bridge") },
-//     CpuInfo { arch: "x86_64", vendor: "ivybridge", note: Some("Intel Ivy Bridge") },
-//     CpuInfo { arch: "x86_64", vendor: "haswell", note: Some("Intel Haswell") },
-//     CpuInfo { arch: "x86_64", vendor: "broadwell", note: Some("Intel Broadwell") },
-//     CpuInfo { arch: "x86_64", vendor: "skylake", note: Some("Intel Skylake") },
-//     CpuInfo { arch: "x86_64", vendor: "cascadelake", note: Some("Intel Cascade Lake") },
-//     CpuInfo { arch: "x86_64", vendor: "zen", note: Some("AMD Zen") },
-//     CpuInfo { arch: "x86_64", vendor: "zen2", note: Some("AMD Zen 2") },
-//     CpuInfo { arch: "x86_64", vendor: "zen3", note: Some("AMD Zen 3") },
-//     CpuInfo { arch: "x86_64", vendor: "epyc", note: Some("AMD EPYC server") },
-// ];
+pub const VERSION: &str = "v0.1.0 RC 3";
 
 //=== helpers ===//
 fn parse_mem_line(line: &str) -> u64 {
@@ -190,6 +123,8 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     let proot = file_exists("/home/onyx/bin/proot");
     let glibc = file_exists("/home/onyx/glibc/");
 
+    let onyxit = file_exists("/home/onyx/bin/core/onyxit");
+
     println!("{BLUEB}[>== onyx doctor ==<]{ESC}");
 
     //=== system ===//
@@ -291,31 +226,43 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     //=== software ===//
     println!("{BLUEB}software:{ESC}");
     if VERSION == latest_version {
-        println!("    {GREEN}[onyx]{ESC} {VERSION} (latest)");
+        println!("    {BLUE}[onyx]{ESC} {VERSION} (latest)");
     } else if !latest_version.is_empty() {
         println!("    {YELLOW}[onyx]{ESC} {VERSION} (latest: {latest_version})");
     } else {
         println!("    {YELLOW}[onyx]{ESC} {VERSION} (latest: unknown)");
     }
 
+    if onyxit {
+        println!("    {BLUE}[onyxit]{ESC} installed");
+    } else {
+        println!("    {YELLOW}[onyxit]{ESC} not installed");
+    }
+
     let root = rooted();
     
     if root {
         println!("    {GREEN}[root]{ESC} running as root, chroot activated");
-    } else {
-        println!("    {YELLOW}[root]{ESC} non-root user, using proot");
-    }
 
-    if proot {
-        println!("    {GREEN}[proot]{ESC} installed");
+        if proot {
+            println!("    {GREEN}[proot]{ESC} installed");
+        } else {
+            println!("    {YELLOW}[proot]{ESC} not installed, running with root");
+        }
     } else {
-        println!("    {YELLOW}[proot]{ESC} not installed, root required");
+        if proot {
+            println!("    {GREEN}[proot]{ESC} installed");
+        } else {
+            println!("    {YELLOW}[proot]{ESC} not installed, root required");
+        }
+
+        println!("    {YELLOW}[root]{ESC} non-root user, using proot");
     }
 
     if box64 && arch == "aarch64" {
         println!("    {GREEN}[box64]{ESC} installed");
     } else if !box64 && arch == "aarch64" {
-        println!("    {RED}[box64]{ESC} not installed");
+        println!("    {YELLOW}[box64]{ESC} not installed");
     } else {
         println!("    {DIM}[box64]{ESC} not required on x86_64");
     }
@@ -323,7 +270,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     if glibc && arch == "aarch64" {
         println!("    {GREEN}[glibc]{ESC} installed");
     } else if !glibc && arch == "aarch64" {
-        println!("    {RED}[glibc]{ESC} not installed");
+        println!("    {YELLOW}[glibc]{ESC} not installed");
     } else {
         println!("    {DIM}[glibc]{ESC} not required on x86_64");
     }
