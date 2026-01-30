@@ -15,6 +15,7 @@ pub fn cmd(args: Vec<String>) {
         arch, 
         latest_version
     ) = doctor::cmd();
+    let _ = ONYX_DIR;
 
     let arch = if args.contains(&"--force-aarch64".to_string()) {
         "aarch64"

@@ -1,12 +1,12 @@
 use crate::cpu;
 
-use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, fetch, file_exists, infoln, rooted, BLUEB};
+use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, file_exists, infoln, rooted, BLUEB, fetch};
 
 use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.0 RC 6";
+pub const VERSION: &str = "v0.1.0";
 
 //=== helpers ===//
 fn parse_mem_line(line: &str) -> u64 {

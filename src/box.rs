@@ -134,6 +134,11 @@ fn limit_box(profile: String) {
 
 //=== cli ===//
 pub fn cmd(args: Vec<String>) {
+    if args.len() < 3 {
+        errln("box", "not enough arguments were provided");
+        errln("box", "see 'onyx help box' for usage");
+    }
+
     match args[2].as_str() {
         "open" => {
             open(args);
