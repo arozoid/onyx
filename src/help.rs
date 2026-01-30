@@ -1,53 +1,100 @@
-use crate::helpers::{BLUE, BLUEB, DIM, ESC, errln, time_get};
+use crate::helpers::{BLUE, YELLOW, DIM, ESC, errln, time_get};
 use crate::lux::ext::list_help;
 
-pub fn make_help(header: &str, options: Vec<(String, String)>) {
-    // header
-    println!("{BLUEB}{header}{ESC}");
+fn visible_len(s: &str) -> usize {
+    // remove ANSI escape codes like \x1b[...m
+    let re = regex::Regex::new(r"\x1b\[[0-9;]*m").unwrap();
+    re.replace_all(s, "").len()
+}
 
-    // find longest option for padding
-    let max_len = options.iter().map(|(opt, _)| opt.len()).max().unwrap_or(0);
+pub fn make_help(header: &str, options: Vec<(String, String)>) {
+    println!("{BLUE}{header}{ESC}");
+
+    // max visible width of first lines
+    let max_len = options.iter().map(|(opt, _)| {
+        opt.lines().next().map(|s| s.len()).unwrap_or(0)
+    }).max().unwrap_or(0);
 
     for (opt, desc) in options.iter() {
-        // split opt into first word and rest
-        let mut parts = opt.splitn(2, ' ');
-        let first = parts.next().unwrap_or("");
-        let rest = parts.next().unwrap_or("");
+        let mut lines = opt.lines();
 
-        if rest.is_empty() {
-            // no space in opt
-            println!("  {first:<width$}  {DIM}{desc}{ESC}", width = max_len + 2);
-        } else {
-            // space exists, print first normally, rest in blue
-            let colored_opt = format!("{first} {BLUE}{rest}{ESC}");
-            println!("  {colored_opt:<width$}  {DIM}{desc}{ESC}", width = max_len + 2);
+        if let Some(first_line) = lines.next() {
+            // split first/rest for coloring
+            let mut parts = first_line.splitn(2, ' ');
+            let first = parts.next().unwrap_or("");
+            let rest = parts.next().unwrap_or("");
+
+            let colored = if rest.is_empty() {
+                first.to_string()
+            } else {
+                format!("{} {BLUE}{}{}", first, rest, ESC)
+            };
+
+            // calculate real padding ignoring ANSI
+            let pad = max_len.saturating_sub(visible_len(&colored));
+
+            println!("  {}{:pad$}  {DIM}{}{ESC}", colored, "", desc, pad=pad);
+        }
+
+        // remaining lines: just yellow, aligned under option column
+        for line in lines {
+            println!("    {YELLOW}{:<width$}{ESC}", line, width = max_len);
         }
     }
 }
-
 
 fn sub_cmd(args: Vec<String>) {
     match args[2].as_str() {
         "box" => {
             let r#box = vec![
-                ("create <name> <rootfs-folder>".to_string(), "Create a new Onyx box".to_string()),
                 ("delete <name>".to_string(), "Delete an existing Onyx box".to_string()),
-                ("open <name>".to_string(), "Open an Onyx box in the terminal".to_string()),
+
+                ("open <name>\n --profile=PROFILE".to_string(), 
+                "Open an Onyx box in the terminal".to_string()),
+                
+                ("create <name> <rootfs-folder>\n --move=FALSE".to_string(), 
+                "Create a new Onyx box from an existing rootfs".to_string()),
+
                 ("list".to_string(), "List all existing Onyx boxes".to_string()),
             ];
             make_help("Box Modules:", r#box);
+            println!();
+            println!("{DIM}(all options are optional)");
         }
         "update" => {
-            
+            let update = vec![
+                ("--force".to_string(), "Force update everything even if no updates are available".to_string()),
+                ("--force-aarch64".to_string(), "Force ARM/AARCH64 software".to_string()),
+                ("--force-x86_64".to_string(), "Force x86_64 software".to_string()),
+                ("--ignore-onyx".to_string(), "Ignore Onyx updates".to_string()),
+                ("--ignore-proot".to_string(), "Ignore PRoot updates".to_string()),
+                ("--ignore-box64".to_string(), "Ignore Box64 updates".to_string()),
+            ];
+            make_help("Update Modules:", update);
         }
         "profile" => {
-            
+            let profile = vec![
+                ("list".to_string(), "List all available performance profiles".to_string()),
+                ("use <profile>".to_string(), "Use a specific performance profile".to_string()),
+
+                ("edit <profile> \n--name=NAME --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
+                "Edit an existing performance profile".to_string()),
+
+                ("create <profile>\n--name=NAME --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
+                "Create your own performance profile".to_string()),
+
+                ("delete <profile>".to_string(), "Delete a performance profile".to_string()),
+            ];
+            make_help("Profile Modules:", profile);
         }
         "doctor" => {
-            
+            println!("{BLUE}usage:{ESC}");
+            println!("  onyx doctor\n");
         }
         "help" => {
-
+            println!("{BLUE}usage:{ESC}");
+            println!("  onyx help <module>");
+            println!("  onyx help");
         }
         _ => {
             errln("onyx", format!("unknown module: {} {DIM}[{}]{ESC}", args[1], time_get()).as_str());

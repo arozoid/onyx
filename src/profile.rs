@@ -1,5 +1,5 @@
-use crate::helpers::{errln, infoln, ONYX_DIR, pin_cpu, BLUE, ESC, BLUEB, GREEN, RED, YELLOW};
-use serde::Deserialize;
+use crate::helpers::{errln, infoln, ONYX_DIR, pin_cpu, BLUE, ESC, BLUEB, GREEN, RED, YELLOW, BOLD};
+use serde::{Serialize, Deserialize};
 use std::{
     collections::HashMap,
     fs,
@@ -7,29 +7,36 @@ use std::{
 };
 
 fn prof_table() {
-
     let profiles = load_profiles(&ONYX_DIR.join("profiles")).unwrap();
+    let mut ordered: Vec<_> = profiles.values().collect();
+    ordered.sort_by(|a, b| {
+        a.score()
+            .cmp(&b.score())
+            .then_with(|| a.name.cmp(&b.name))
+    });
 
     // column widths
-    let name_w = 12;
-    let mem_w  = 10;
-    let cpu_w  = 8;
-    let nice_w = 4;
+    let name_w  = 12;
+    let score_w = 8;
+    let mem_w   = 10;
+    let cpu_w   = 8;
+    let nice_w  = 4;
 
     // header
     println!(
-        "{BLUEB}{:<name_w$} {:<mem_w$} {:<cpu_w$} {:<nice_w$}{ESC}",
-        "name", "memory", "cpu", "nice",
+        "{BLUEB}{:<name_w$} {:<score_w$} {:<mem_w$} {:<cpu_w$} {:<nice_w$}{ESC}",
+        "name", "score", "memory", "cpu", "nice",
         name_w = name_w,
+        score_w = score_w,
         mem_w = mem_w,
         cpu_w = cpu_w,
         nice_w = nice_w,
     );
 
-    println!("{}", "==".repeat(name_w + mem_w + cpu_w + nice_w + 5));
+    println!("{BOLD}{}{ESC}", "==".repeat(name_w + score_w + mem_w + cpu_w + nice_w + 5));
 
     // rows
-    for p in profiles.values() {
+    for p in ordered {
         let mem_color = match p.memory_severity() {
             0 => GREEN,
             1 => YELLOW,
@@ -49,16 +56,19 @@ fn prof_table() {
         };
 
         println!(
-            "{BLUE}{:<name_w$}{ESC} \
+            "{BLUEB}{:<name_w$}{ESC} \
+            {BLUE}{:<score_w$}{ESC} \
             {mem_color}{:<mem_w$}{ESC} \
             {cpu_color}{:<cpu_w$}{ESC} \
             {nice_color}{:<nice_w$}{ESC}    {}",
             p.name,
+            p.score(),
             p.memory_display(),
             p.cpu_display(),
             p.nice,
             p.description.as_deref().unwrap_or(""),
             name_w = name_w,
+            score_w = score_w,
             mem_w = mem_w,
             cpu_w = cpu_w,
             nice_w = nice_w,
@@ -109,7 +119,7 @@ pub fn apply_profile_cpu(profile: &Profile) {
     }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Profile {
     pub name: String,
     pub description: Option<String>,
@@ -143,9 +153,40 @@ impl Profile {
             _ => 2,
         }
     }
+    fn memory_weight(&self) -> u64 {
+        match self.memory {
+            MemoryConfig::Unlimited => 0, // best
+
+            MemoryConfig::Percent { value } => {
+                // scale so 100% = 0, 1% = max penalty
+                let value = value.max(1); // avoid divide by zero
+                100_000 / value as u64
+            }
+
+            MemoryConfig::Fixed { mb } => {
+                // scale so 1024 MB = moderate, 12 MB = huge, smooth
+                // weight = 100_000 - mb * 90
+                100_000_u64.saturating_sub(mb as u64 * 90)
+            }
+        }
+    }
+    fn cpu_weight(&self) -> u64 {
+        match &self.cpu {
+            None => 0,                    // unlimited
+            Some(cpu) => 1000 - cpu.cores as u64 * 100,
+        }
+    }
+    fn nice_weight(&self) -> u64 {
+        self.nice as u64
+    }
+    fn score(&self) -> u64 {
+        self.memory_weight() * 10
+            + self.cpu_weight() * 2
+            + self.nice_weight()
+    }
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 #[serde(tag = "type")]
 pub enum MemoryConfig {
     #[serde(rename = "unlimited")]
@@ -158,7 +199,7 @@ pub enum MemoryConfig {
     Fixed { mb: u64 },
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct CpuConfig {
     pub cores: usize,
 }
@@ -202,4 +243,24 @@ pub fn cmd(args: Vec<String>) {
             errln("profile", "see 'onyx help profile' for usage");
         }
     }
+}
+
+fn profile_path(name: &str) -> std::path::PathBuf {
+    Path::new(ONYX_DIR.join("profiles").to_str().expect("failed to get profiles directory")).join(format!("{}.toml", name))
+}
+
+fn load_profile(name: &str) -> Option<Profile> {
+    let path = profile_path(name);
+    if path.exists() {
+        let s = fs::read_to_string(path).ok()?;
+        toml::from_str(&s).ok()
+    } else {
+        None
+    }
+}
+
+fn save_profile(profile: &Profile) {
+    let path = profile_path(&profile.name);
+    let toml_str = toml::to_string_pretty(profile).expect("Failed to serialize profile");
+    fs::write(path, toml_str).expect("Failed to write profile");
 }

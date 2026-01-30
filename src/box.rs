@@ -97,8 +97,7 @@ fn try_unshare_mount_ns() -> Result<(), String> {
     }
 }
 
-//=== cli ===//
-fn limit_box() {
+fn limit_box(profile: String) {
     let backup = Profile {
         name: "backup".to_string(),
         description: Some("Temporary backup profile".to_string()),
@@ -106,13 +105,22 @@ fn limit_box() {
         memory: MemoryConfig::Unlimited,
         cpu: None,
     };
-    let binding = load_profiles(ONYX_DIR.join("profiles").as_path()).expect("failed to fetch profiles");
-    let profile = binding.get(read_current_profile().unwrap().as_str()).unwrap_or(&backup);
+    let binding;
+    let prof;
+    if profile == String::new() {
+        binding = load_profiles(ONYX_DIR.join("profiles").as_path()).expect("failed to fetch profiles");
+        prof = binding.get(read_current_profile().unwrap().as_str()).unwrap_or(&backup);
+    } else if profile == "__backup__".to_string() {
+        prof = &backup;
+    } else {
+        binding = load_profiles(ONYX_DIR.join("profiles").as_path()).expect("failed to fetch profiles");
+        prof = binding.get(&profile).unwrap_or(&backup);
+    }
 
-    apply_profile_cpu(profile);
+    apply_profile_cpu(prof);
 
-    let _ = set_nice(profile.nice);
-    match profile.memory {
+    let _ = set_nice(prof.nice);
+    match prof.memory {
         Unlimited => {}
         Percent{value} => {
             let limit = crate::doctor::get_mem().1 * value as u64 / 100;
@@ -124,6 +132,7 @@ fn limit_box() {
     }
 }
 
+//=== cli ===//
 pub fn cmd(args: Vec<String>) {
     match args[2].as_str() {
         "open" => {
@@ -209,7 +218,23 @@ fn exec(args: Vec<String>) {
         return;
     }
 
-    limit_box();
+    let mut prof = String::new();
+    for arg in args.clone() {
+        if let Some(profile) = arg.strip_prefix("--profile=") {
+            prof = profile.to_string();
+        }
+    }
+
+    if prof.len() > 0 {
+        limit_box(prof);
+    } else {
+        prof = read_current_profile().expect("failed to obtain 'current-profile'");
+        if prof.len() > 0 {
+            limit_box(prof);
+        } else {
+            limit_box("__backup__".to_string());
+        }
+    }
 
     if !rooted() {
         infoln("box", "running as normal user via proot");
@@ -291,7 +316,23 @@ fn open(args: Vec<String>) {
         return;
     }
 
-    limit_box();
+    let mut prof = String::new();
+    for arg in args.clone() {
+        if let Some(profile) = arg.strip_prefix("--profile=") {
+            prof = profile.to_string();
+        }
+    }
+
+    if prof.len() > 0 {
+        limit_box(prof);
+    } else {
+        prof = read_current_profile().expect("failed to obtain 'current-profile'");
+        if prof.len() > 0 {
+            limit_box(prof);
+        } else {
+            limit_box("__backup__".to_string());
+        }
+    }
 
     if !rooted() {
         infoln("box", "running as normal user via proot");

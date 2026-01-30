@@ -21,6 +21,7 @@ pub const GREEN: &str = "\x1b[32m";
 pub const YELLOW: &str = "\x1b[33m";
 
 // bold
+pub const BOLD: &str  = "\x1b[1;37m";
 pub const BLUEB: &str = "\x1b[1;34m";
 
 /// global onyx dir in the user’s home
