@@ -1,8 +1,8 @@
-use crate::helpers::{errln, infoln, ONYX_DIR, pin_cpu, BLUE, ESC, BLUEB, GREEN, RED, YELLOW, BOLD};
+use crate::helpers::{errln, infoln, ONYX_DIR, pin_cpu, BLUE, ESC, BLUEB, GREEN, RED, YELLOW, BOLD, file_exists};
 use serde::{Serialize, Deserialize};
 use std::{
     collections::HashMap,
-    fs,
+    fs::{self, File},
     path::{Path},
 };
 
@@ -238,6 +238,15 @@ pub fn cmd(args: Vec<String>) {
             }
             infoln("profile", format!("chose '{}' performance profile.", args[3]).as_str());
         }
+        "edit" => {
+          edit_profile_from_args(args);
+        }
+        "create" => {
+          create_profile_from_args(args);
+        }
+        "delete" => {
+          delete_profile(&args[3]);
+        }
         _ => {
             errln("profile", "unknown subcommand");
             errln("profile", "see 'onyx help profile' for usage");
@@ -245,8 +254,24 @@ pub fn cmd(args: Vec<String>) {
     }
 }
 
+fn parse_memory(s: &str) -> MemoryConfig {
+    if s.eq_ignore_ascii_case("unlimited") {
+        MemoryConfig::Unlimited
+    } else if let Some(val) = s.strip_prefix("percent:") {
+        let value = val.parse().unwrap_or(100);
+        MemoryConfig::Percent { value }
+    } else if let Some(val) = s.strip_prefix("fixed:") {
+        let mb = val.parse().unwrap_or(0);
+        MemoryConfig::Fixed { mb }
+    } else {
+        eprintln!("Invalid memory value '{}', defaulting to unlimited", s);
+        MemoryConfig::Unlimited
+    }
+}
+
 fn profile_path(name: &str) -> std::path::PathBuf {
-    Path::new(ONYX_DIR.join("profiles").to_str().expect("failed to get profiles directory")).join(format!("{}.toml", name))
+    // ONYX_DIR is assumed to be a PathBuf
+    ONYX_DIR.join("profiles").join(format!("{}.toml", name))
 }
 
 fn load_profile(name: &str) -> Option<Profile> {
@@ -260,7 +285,86 @@ fn load_profile(name: &str) -> Option<Profile> {
 }
 
 fn save_profile(profile: &Profile) {
+    println!("{:?}", ONYX_DIR.to_str().unwrap());
     let path = profile_path(&profile.name);
     let toml_str = toml::to_string_pretty(profile).expect("Failed to serialize profile");
+    println!("{:?}", path);
+    if !file_exists(path.to_str().unwrap()) {
+      let _ = File::create(&path);
+    }
     fs::write(path, toml_str).expect("Failed to write profile");
+}
+
+fn delete_profile(name: &str) {
+    let path = profile_path(name);
+    if path.exists() {
+        fs::remove_file(path).expect("Failed to delete profile");
+        println!("Profile '{}' deleted", name);
+    } else {
+        eprintln!("Profile '{}' does not exist", name);
+    }
+}
+
+fn create_profile_from_args(args: Vec<String>) {
+    if args.len() < 4 {
+        eprintln!("Usage: profile create <name> [--flag=value...]");
+        return;
+    }
+
+    let name = &args[3];
+    let mut profile = Profile {
+        name: name.clone(),
+        description: None,
+        nice: 0,
+        memory: MemoryConfig::Unlimited,
+        cpu: None,
+    };
+
+    for arg in &args[4..] {
+        if let Some(val) = arg.strip_prefix("--description=") {
+            profile.description = Some(val.to_string());
+        } else if let Some(val) = arg.strip_prefix("--nice=") {
+            profile.nice = val.parse().unwrap_or(profile.nice);
+        } else if let Some(val) = arg.strip_prefix("--memory=") {
+            profile.memory = parse_memory(val);
+        } else if let Some(val) = arg.strip_prefix("--cpu-cores=") {
+            let cores = val.parse().unwrap_or(profile.cpu.as_ref().map(|c| c.cores).unwrap_or(0));
+            profile.cpu = Some(CpuConfig { cores });
+        }
+    }
+
+    save_profile(&profile);
+    println!("Profile '{}' created", name);
+}
+
+fn edit_profile_from_args(args: Vec<String>) {
+    if args.is_empty() {
+        eprintln!("Usage: profile edit <name> [--flag=value...]");
+        return;
+    }
+
+    let name = &args[0];
+    let mut profile = match load_profile(name) {
+        Some(p) => p,
+        None => {
+            eprintln!("Profile '{}' does not exist", name);
+            return;
+        }
+    };
+
+    for arg in &args[1..] {
+        if let Some(val) = arg.strip_prefix("--description=") {
+            profile.description = Some(val.to_string());
+        } else if let Some(val) = arg.strip_prefix("--nice=") {
+            profile.nice = val.parse().unwrap_or(profile.nice);
+        } else if let Some(val) = arg.strip_prefix("--memory=") {
+            profile.memory = parse_memory(val);
+        } else if let Some(val) = arg.strip_prefix("--cpu-cores=") {
+            let cores = val.parse().unwrap_or(profile.cpu.as_ref().map(|c| c.cores).unwrap_or(0));
+            profile.cpu = Some(CpuConfig { cores });
+        }
+    }
+
+    save_profile(&profile);
+    println!("Profile '{}' updated", name);
 }

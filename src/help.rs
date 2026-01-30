@@ -77,10 +77,10 @@ fn sub_cmd(args: Vec<String>) {
                 ("list".to_string(), "List all available performance profiles".to_string()),
                 ("use <profile>".to_string(), "Use a specific performance profile".to_string()),
 
-                ("edit <profile> \n--name=NAME --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
+                ("edit <profile> \n--name=NAME --description=DESCRIPTION --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
                 "Edit an existing performance profile".to_string()),
 
-                ("create <profile>\n--name=NAME --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
+                ("create <profile>\n--name=NAME --description=DESCRIPTION --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
                 "Create your own performance profile".to_string()),
 
                 ("delete <profile>".to_string(), "Delete a performance profile".to_string()),
@@ -104,7 +104,7 @@ fn sub_cmd(args: Vec<String>) {
 
 pub fn cmd(args: Vec<String>) {
     // header 1
-    println!("{BLUE}[onyx]{ESC} v0.1.0 {DIM}(RC 2){ESC}");
+    println!("{BLUE}[onyx]{ESC} v0.1.0 {DIM}(RC 6){ESC}");
 
     if args.len() > 2 {
         sub_cmd(args);
