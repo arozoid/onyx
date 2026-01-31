@@ -12,7 +12,7 @@ v0.1.1:
 * **Portability:** Onyx is a ~1MB binary that handles everything, like updates, box management, and performance profiles.
 * **Unprivileged Execution:** Native support for `proot` to provide guest-side root simulation without host-side `sudo`.
 * **Performance Profiles:** Hard limit your box's resource usage easily and automatically using either the default profiles, or your own!
-* **Organized Files:** Everything is kept in /home/onyx!
+* **Organized Files:** Everything is kept in /home/onyx or $HOME/.onyx!
 * **Optimized:** Compiled binary size optimized for 32mb (and less!) ramdisk environments.
 * **Host-agnostic:** Runs on any Linux kernel that supports basic namespaces or `proot`! (latest officially supported: kernel 4.14)
 * **Mount Safe:** Uses unshared and guarded private mounts for Onyx box execution.
