@@ -118,7 +118,7 @@ fn sub_cmd(args: Vec<String>) {
 
 pub fn cmd(args: Vec<String>) {
     // header 1
-    println!("{BLUE}[onyx]{ESC} v0.1.0 {DIM}(RC 6){ESC}");
+    println!("{BLUE}[onyx]{ESC} v0.1.1 {DIM}{ESC}");
 
     if args.len() > 2 {
         sub_cmd(args);
