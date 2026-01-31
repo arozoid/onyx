@@ -82,9 +82,8 @@ fi
 curl -fsSL "$URL" -o "$ONYX_DIR/bin/core/onyx"
 chmod +x "$ONYX_DIR/bin/core/onyx"
 
-# 4. setting the "world-writable" brute permissions
+# 4. setting onyx executable
 echo -e "${CYAN}unlocking the gates...${CLR}"
-chmod -R 777 "$ONYX_DIR"
 chmod +x "$ONYX_DIR/bin/core/onyx"
 
 # 5. make it globally accessible for sudo
