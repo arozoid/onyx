@@ -82,17 +82,10 @@ fi
 curl -fsSL "$URL" -o "$ONYX_DIR/bin/core/onyx"
 chmod +x "$ONYX_DIR/bin/core/onyx"
 
-# dummy download (replace with curl -L "$URL" -o "$ONYX_DIR/bin/onyx")
-# using -L because redirects are the only way to hit "latest"
-if ! curl -sL "$URL" -o "$ONYX_DIR/bin/core/onyx"; then
-    echo "${RED}error: brian blocked the download. check connection.${CLR}"
-    exit 1
-fi
-
 # 4. setting the "world-writable" brute permissions
 echo -e "${CYAN}unlocking the gates...${CLR}"
 chmod -R 777 "$ONYX_DIR"
-chmod +x "$ONYX_DIR/bin/onyx"
+chmod +x "$ONYX_DIR/bin/core/onyx"
 
 echo "=================================="
 echo -e "${BOLD}onyx is now installed.${CLR}"
