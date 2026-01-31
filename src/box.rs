@@ -419,6 +419,10 @@ fn run_proot_session(root_path: &Path) {
     let shell = find_shell(root_path);
     
     Command::new(proot_bin)
+        .env_clear() // kill everything termux gave us
+        .env("HOME", "/root")
+        .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+        .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         .arg("-r").arg(root_path)
         .arg("-0")
         .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
@@ -526,6 +530,10 @@ fn exec(args: Vec<String>) {
                 let shell = find_shell(&sys_path);
                 
                 Command::new(proot_bin)
+                    .env_clear() // kill everything termux gave us
+                    .env("HOME", "/root")
+                    .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+                    .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
                     .arg("-r").arg(&sys_path)
                     .arg("-0")
                     .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
@@ -541,6 +549,10 @@ fn exec(args: Vec<String>) {
             let shell = find_shell(&sys_path);
             
             Command::new(proot_bin)
+                .env_clear() // kill everything termux gave us
+                .env("HOME", "/root")
+                .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+                .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
                 .arg("-r").arg(&sys_path)
                 .arg("-0")
                 .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
@@ -673,6 +685,10 @@ fn open(args: Vec<String>) {
             );
 
             let status = Command::new("unshare")
+                .env_clear() // kill everything termux gave us
+                .env("HOME", "/root")
+                .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+                .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
                 .args(&["-U", "-r", "-m", "bash", "-c", &chain_cmd])
                 .status()
                 .expect("failed to execute namespaced chain");
