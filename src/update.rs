@@ -37,7 +37,7 @@ pub fn cmd(args: Vec<String>) {
             download("https://github.com/arozoid/onyx/releases/latest/download/onyx-x86_64", ONYX_DIR.join("bin/core/onyx").to_str().unwrap()).unwrap();
         }
         Command::new("chmod")
-                .args(["+x", ONYX_DIR.join("onyx").to_str().unwrap()])
+                .args(["+x", ONYX_DIR.join("bin/core/onyx").to_str().unwrap()])
                 .status()
                 .unwrap();
     }
@@ -112,6 +112,6 @@ pub fn cmd(args: Vec<String>) {
         || args.contains(&"--force".to_string()))
     {
         infoln("onyx", "installing box64/glibc...");
-        infoln("onyx", format!("failed to install. x86_64 box support coming soon!").as_str());
+        infoln("onyx", format!("box64 was not installed. x86_64 box support coming soon!").as_str());
     }
 }
