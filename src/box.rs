@@ -287,17 +287,19 @@ fn exec(args: Vec<String>) {
 
         let mut cmd = Command::new(proot_bin);
         cmd
+            .env_clear() // kill everything termux gave us
+            .env("HOME", "/root")
+            .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
             .arg("-r").arg(&sys_path)
             .arg("-0")
             .arg("-b").arg("/dev")
             .arg("-b").arg("/proc")
             .arg("-b").arg("/sys")
             .arg("-w").arg("/")
+            .arg("--link2symlink")
             .arg(strcommand)
-            // env handling
-            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
-            .env("PATH", "/usr/bin")
-            .env_remove("LD_PRELOAD")
             .status()
             .expect("failed to run proot");
         return;
@@ -386,19 +388,22 @@ fn open(args: Vec<String>) {
         
         let mut cmd = Command::new(proot_bin);
         cmd
+            .env_clear() // kill everything termux gave us
+            .env("HOME", "/root")
+            .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
             .arg("-r").arg(&sys_path)
             .arg("-0")
             .arg("-b").arg("/dev")
             .arg("-b").arg("/proc")
             .arg("-b").arg("/sys")
             .arg("-w").arg("/")
+            .arg("--link2symlink")
             .arg(shell)
-            // env handling
-            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
-            .env("PATH", "/usr/bin")
-            .env_remove("LD_PRELOAD")
             .status()
             .expect("failed to run proot");
+
         
         infoln("box", "exited box");
         return;
