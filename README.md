@@ -23,7 +23,7 @@ v0.1.1:
 
 ```bash
 ## install onyx
-curl https://github.com/arozoid/onyx/releases/latest/download/install.sh | sh
+sudo curl -fsSL https://raw.githubusercontent.com/arozoid/onyx/main/install.sh | sudo bash
 
 ## usage
 # create a new box environment (can be debootstrap or anything that generates a rootfs)
