@@ -1,5 +1,5 @@
 #!/bin/sh
-# onyx v0.1.1 - stylish brute-strap
+# onyx v0.1.3 - stylish brute-strap
 set -e
 
 # colors: the "onyx" palette
@@ -87,8 +87,35 @@ echo -e "${CYAN}unlocking the gates...${CLR}"
 chmod -R 777 "$ONYX_DIR"
 chmod +x "$ONYX_DIR/bin/core/onyx"
 
+# 5. creating the environment hook
+echo -e "${CYAN}stabilizing environment...${CLR}"
+ENV_FILE="$ONYX_DIR/bin/core/env"
+
+# create a portable env file
+cat <<EOF > "$ENV_FILE"
+# onyx environment
+export PATH="\$PATH:$ONYX_DIR/bin/core"
+EOF
+
+# detect shell rc file
+case "$SHELL" in
+    */zsh)  SHELL_RC="$HOME/.zshrc" ;;
+    */bash) SHELL_RC="$HOME/.bashrc" ;;
+    *)      SHELL_RC="$HOME/.profile" ;;
+esac
+
+# try to auto-inject the source command
+if [ -f "$SHELL_RC" ]; then
+    if ! grep -q "$ENV_FILE" "$SHELL_RC"; then
+        echo "" >> "$SHELL_RC"
+        echo "# onyx loader" >> "$SHELL_RC"
+        echo ". \"$ENV_FILE\"" >> "$SHELL_RC"
+        echo -e "  -> injected hook into $SHELL_RC"
+    fi
+fi
+
 echo "=================================="
-echo -e "${BOLD}onyx is now installed.${CLR}"
-echo -e "run: ${CYAN}export PATH=\$PATH:$ONYX_DIR/bin/core${CLR}"
-#echo -e "then: ${CYAN}onyx normalize${CLR}"
+echo -e "${BOLD}onyx is now permanent.${CLR}"
+echo -e "run: ${CYAN}source $ENV_FILE${CLR} (or restart terminal)"
+echo -e "then: ${CYAN}onyx normalize${CLR}"
 
