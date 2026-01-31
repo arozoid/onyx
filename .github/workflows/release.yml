@@ -11,7 +11,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # fail-fast: false ensures one architecture failing doesn't kill the others
     strategy:
+      fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
@@ -43,28 +45,35 @@ jobs:
         with:
           ndk-version: r25c
 
-      - name: install cargo-ndk (host tool)
+      # this prevents the 5-minute compile time for cargo-ndk on every run
+      - name: cache cargo-ndk
         if: ${{ matrix.use_ndk }}
-        # we run this with a cleared environment to stop it from thinking it's an android
-        run: cargo install cargo-ndk --locked
+        uses: actions/cache@v3
+        with:
+          path: ~/.cargo/bin/cargo-ndk
+          key: ${{ runner.os }}-cargo-ndk
+
+      - name: install cargo-ndk
+        if: ${{ matrix.use_ndk }}
+        run: hash cargo-ndk 2>/dev/null || cargo install cargo-ndk --locked
 
       - name: build optimized binary
         run: |
           if [ "${{ matrix.use_ndk }}" = "true" ]; then
             cargo ndk -t aarch64-linux-android build --release
-            # specifically grab from the android subfolder
             cp target/aarch64-linux-android/release/onyx ./${{ matrix.name }}
           else
             cargo build --release --target ${{ matrix.target }}
-            # use cp instead of mv to avoid "same file" errors during retries
             cp target/${{ matrix.target }}/release/onyx ./${{ matrix.name }}
           fi
 
-      - name: strip symbols (keep it < 1mb)
+      - name: strip symbols
         run: strip ${{ matrix.name }} || echo "strip failed, continuing..."
 
       - name: upload assets
         uses: softprops/action-gh-release@v1
         with:
           files: ${{ matrix.name }}
+          # explicitly use the tag to prevent "draft" ghosting
+          tag_name: ${{ github.ref_name }}
           generate_release_notes: true

@@ -112,6 +112,6 @@ pub fn cmd(args: Vec<String>) {
         || args.contains(&"--force".to_string()))
     {
         infoln("onyx", "installing box64/glibc...");
-        infoln("onyx", format!("failed to install. x86_64 box support coming in v0.2!").as_str());
+        infoln("onyx", format!("failed to install. x86_64 box support coming soon!").as_str());
     }
 }

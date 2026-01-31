@@ -65,7 +65,7 @@ impl MountGuard {
 
         // bind mounts logic (proc, dev, sys)
         let binds = vec![
-            ("proc", "proc", vec![]),
+            ("proc", "proc", vec!["-t", "proc"]),
             ("/dev", "dev", vec!["--bind"]),
             ("/dev/pts", "dev/pts", vec!["--bind"]),
             ("/sys", "sys", vec!["--bind"]),
