@@ -423,6 +423,7 @@ fn run_proot_session(root_path: &Path) {
         .env("HOME", "/root")
         .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
         .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+        .env("PROOT_TMP_DIR", ONYX_DIR.join("tmp"))
         .arg("-r").arg(root_path)
         .arg("-0")
         .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
@@ -534,6 +535,7 @@ fn exec(args: Vec<String>) {
                     .env("HOME", "/root")
                     .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
                     .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                    .env("PROOT_TMP_DIR", ONYX_DIR.join("tmp"))
                     .arg("-r").arg(&sys_path)
                     .arg("-0")
                     .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
@@ -553,6 +555,7 @@ fn exec(args: Vec<String>) {
                 .env("HOME", "/root")
                 .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
                 .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                .env("PROOT_TMP_DIR", ONYX_DIR.join("tmp"))
                 .arg("-r").arg(&sys_path)
                 .arg("-0")
                 .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
@@ -598,6 +601,7 @@ fn exec(args: Vec<String>) {
     .env("HOME", "/root")
     .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
     .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+    .env("PROOT_TMP_DIR", ONYX_DIR.join("tmp"))
     .arg(guard.root())       // chroot root = merged overlay
     .arg(shell)              // run the shell
     .arg("-c")               // execute a single command
@@ -689,6 +693,7 @@ fn open(args: Vec<String>) {
                 .env("HOME", "/root")
                 .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
                 .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+                .env("PROOT_TMP_DIR", ONYX_DIR.join("tmp"))
                 .args(&["-U", "-r", "-m", "bash", "-c", &chain_cmd])
                 .status()
                 .expect("failed to execute namespaced chain");
