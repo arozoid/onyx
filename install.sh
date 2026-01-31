@@ -87,7 +87,13 @@ echo -e "${CYAN}unlocking the gates...${CLR}"
 chmod -R 777 "$ONYX_DIR"
 chmod +x "$ONYX_DIR/bin/core/onyx"
 
-# 5. creating the environment hook
+# 5. make it globally accessible for sudo
+if [ "$TARGET" = "linux" ]; then
+    echo -e "${CYAN}linking to /usr/local/bin for sudo support...${CLR}"
+    sudo ln -sf "$ONYX_DIR/bin/core/onyx" /usr/local/bin/onyx || echo -e "${RED}  ! could not link to /usr/local/bin (requires sudo)${CLR}"
+fi
+
+# 6. creating the environment hook
 echo -e "${CYAN}stabilizing environment...${CLR}"
 ENV_FILE="$ONYX_DIR/bin/core/env"
 
@@ -110,12 +116,12 @@ if [ -f "$SHELL_RC" ]; then
         echo "" >> "$SHELL_RC"
         echo "# onyx loader" >> "$SHELL_RC"
         echo ". \"$ENV_FILE\"" >> "$SHELL_RC"
-        echo -e "  -> injected hook into $SHELL_RC"
+        echo -e "  => injected hook into $SHELL_RC"
     fi
 fi
 
 echo "=================================="
-echo -e "${BOLD}onyx is now permanent.${CLR}"
+echo -e "${BOLD}onyx is now installed.${CLR}"
 echo -e "run: ${CYAN}source $ENV_FILE${CLR} (or restart terminal)"
 echo -e "then: ${CYAN}onyx normalize${CLR}"
 
