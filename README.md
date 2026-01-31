@@ -19,17 +19,21 @@ v0.1.1:
 
 ---
 
-## Usage
+## Installation, Usage, and Uninstallation
 
 ```bash
-# install onyx
-...
+## install onyx
+curl https://github.com/arozoid/onyx/releases/latest/download/install.sh | sh
 
+## usage
 # create a new box environment (can be debootstrap or anything that generates a rootfs)
 onyx box create my-box ./linux-rootfs FALSE
 
 # launch the environment
 onyx box open my-box
+
+## uninstall onyx
+rm -rf /home/onyx
 ```
 
 ---
