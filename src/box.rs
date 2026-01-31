@@ -7,7 +7,7 @@ use nix::sched::{self, CloneFlags};
 use dir_size;
 
 use crate::profile::{read_current_profile, load_profiles, Profile, MemoryConfig::{self, Unlimited, Percent, Fixed}, apply_profile_cpu};
-use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB, set_nice, set_memory_limit};
+use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB, set_nice, set_memory_limit, RED};
 
 //=== mount guard ===//
 struct MountGuard {
@@ -140,6 +140,33 @@ pub fn cmd(args: Vec<String>) {
     }
 
     match args[2].as_str() {
+        "delete" => {
+            if args.len() < 4 {
+                errln("box", "usage: onyx box delete <name>");
+                std::process::exit(1);
+            }
+            let name = &args[3];
+            if let Err(e) = delete_box(name) {
+                errln("box", &format!("failed to nuke box '{}': {}", name, e));
+                std::process::exit(1);
+            }
+        }
+
+        "create" => {
+            if args.len() < 5 {
+                errln("box", "usage: onyx box create <name> <rootfs-folder> [--move=true]");
+                std::process::exit(1);
+            }
+            let name = &args[3];
+            let source = Path::new(&args[4]);
+            
+            let move_flag = args.iter().any(|arg| arg.to_lowercase() == "--move=true");
+
+            if let Err(e) = create_box(name, source, move_flag) {
+                errln("box", &format!("creation failed for '{}': {}", name, e));
+                std::process::exit(1);
+            }
+        }
         "open" => {
             open(args);
         }
@@ -427,4 +454,58 @@ fn open(args: Vec<String>) {
     // when function exits, MountGuard is dropped and unmounts occur inside
     infoln("box", "exited box");
     infoln("box", "unmounting...");
+}
+
+/// creates a new box by either copying or moving a rootfs
+fn create_box(name: &str, source_path: &Path, move_mode: bool) -> std::io::Result<()> {
+    let onyx_dir = std::env::var("ONYX_DIR").unwrap_or_else(|_| "/home/onyx".to_string());
+    let target_dir = PathBuf::from(onyx_dir).join("sys").join(name);
+
+    if target_dir.exists() {
+        eprintln!("{RED}[box] err:{ESC} box '{}' already exists.", name);
+        std::process::exit(1);
+    }
+
+    fs::create_dir_all(&target_dir)?;
+
+    if move_mode {
+        // brute move: fast, but only works on same mount point
+        fs::rename(source_path, &target_dir)?;
+    } else {
+        // brute copy: slow, works everywhere
+        // note: in real life, use a crate like `fs_extra` for recursive copy
+        copy_recursive(source_path, &target_dir)?;
+    }
+
+    println!("{BLUE}[box]{ESC} box '{}' created successfully at {:?}", name, target_dir);
+    Ok(())
+}
+
+/// deletes the system entirely
+fn delete_box(name: &str) -> std::io::Result<()> {
+    let onyx_dir = std::env::var("ONYX_DIR").unwrap_or_else(|_| "/home/onyx".to_string());
+    let target_dir = PathBuf::from(onyx_dir).join("sys").join(name);
+
+    if !target_dir.exists() {
+        eprintln!("{RED}[box] err:{ESC} box '{}' does not exist.", name);
+        std::process::exit(1);
+    }
+
+    fs::remove_dir_all(target_dir)?;
+    println!("{BLUE}[box]{ESC} box '{}' nuked.", name);
+    Ok(())
+}
+
+fn copy_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    fs::create_dir_all(dst)?;
+    for entry in fs::read_dir(src)? {
+        let entry = entry?;
+        let ty = entry.file_type()?;
+        if ty.is_dir() {
+            copy_recursive(&entry.path(), &dst.join(entry.file_name()))?;
+        } else {
+            fs::copy(entry.path(), dst.join(entry.file_name()))?;
+        }
+    }
+    Ok(())
 }

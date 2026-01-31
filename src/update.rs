@@ -27,10 +27,14 @@ pub fn cmd(args: Vec<String>) {
 
     if (VERSION != latest_version && !latest_version.is_empty())
         && !args.contains(&"--ignore-onyx".to_string())
-        && args.contains(&"--force".to_string())
+        || args.contains(&"--force".to_string())
     {
         infoln("onyx", "updating onyx...");
-        download("https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/onyx", ONYX_DIR.join("onyx").to_str().unwrap()).unwrap();
+        if arch == "aarch64" {
+            download("https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64", ONYX_DIR.join("onyx").to_str().unwrap()).unwrap();
+        } else {
+            download("https://github.com/arozoid/onyx/releases/latest/download/onyx-x86_64", ONYX_DIR.join("onyx").to_str().unwrap()).unwrap();
+        }
         Command::new("chmod")
                 .args(["+x", ONYX_DIR.join("onyx").to_str().unwrap()])
                 .status()

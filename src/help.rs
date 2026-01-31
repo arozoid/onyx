@@ -1,4 +1,4 @@
-use crate::helpers::{BLUE, YELLOW, DIM, ESC, errln, time_get};
+use crate::helpers::{BLUE, YELLOW, DIM, ESC, errln, time_get, infoln};
 use crate::lux::ext::list_help;
 
 fn visible_len(s: &str) -> usize {
@@ -52,14 +52,14 @@ fn sub_cmd(args: Vec<String>) {
                 ("open <name>\n --profile=PROFILE".to_string(), 
                 "Open an Onyx box in the terminal".to_string()),
                 
-                ("create <name> <rootfs-folder>\n --move=FALSE".to_string(), 
+                ("create <name> <rootfs-folder>\n <move: TRUE/FALSE>".to_string(), 
                 "Create a new Onyx box from an existing rootfs".to_string()),
 
                 ("list".to_string(), "List all existing Onyx boxes".to_string()),
             ];
             make_help("Box Modules:", r#box);
             println!();
-            println!("{DIM}(all options are optional)");
+            infoln("help", "--profile=PROFILE is optional, see 'onyx help profile' for info");
         }
         "update" => {
             let update = vec![
@@ -77,15 +77,26 @@ fn sub_cmd(args: Vec<String>) {
                 ("list".to_string(), "List all available performance profiles".to_string()),
                 ("use <profile>".to_string(), "Use a specific performance profile".to_string()),
 
-                ("edit <profile> \n--name=NAME --description=DESCRIPTION --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
+                ("edit <profile> \n--name=NAME --description=DESCRIPTION --mem=TYPE:VALUE --nice=NICENESS --cores=CPU_CORES".to_string(), 
                 "Edit an existing performance profile".to_string()),
 
-                ("create <profile>\n--name=NAME --description=DESCRIPTION --mem=MEMORY --nice=NICENESS --cores=CPU_CORES".to_string(), 
+                ("create <profile>\n--name=NAME --description=DESCRIPTION --mem=TYPE:VALUE --nice=NICENESS --cores=CPU_CORES".to_string(), 
                 "Create your own performance profile".to_string()),
 
                 ("delete <profile>".to_string(), "Delete a performance profile".to_string()),
             ];
             make_help("Profile Modules:", profile);
+            println!();
+            infoln("help", "the flags provided by 'edit' and 'create' are completely optional;");
+            infoln("help", "not using them either doesn't change the selected profile, or uses the default settings");
+            println!();
+            infoln("help", "examples of --mem=TYPE:VALUE usage:");
+            println!();
+            println!("{YELLOW}--mem=unlimited");
+            println!("--mem=percent:75");
+            println!("--mem=fixed:1024{ESC}");
+            println!();
+            infoln("help", "(fixed is in megabytes)");
         }
         "doctor" => {
             println!("{BLUE}usage:{ESC}");
