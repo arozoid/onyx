@@ -2,28 +2,39 @@ use std::process::Command;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::time::{UNIX_EPOCH};
-use std::process::Stdio;
+use std::io::{self, Write};
+use nix::unistd::User;
 
+use std::os::unix::fs::FileTypeExt;
+use walkdir::WalkDir;
 use nix::unistd::geteuid;
 use nix::sched::{self, CloneFlags};
 use dir_size;
 
 use crate::profile::{read_current_profile, load_profiles, Profile, MemoryConfig::{self, Unlimited, Percent, Fixed}, apply_profile_cpu};
-use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB, set_nice, set_memory_limit, RED};
+use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB, set_nice, set_memory_limit, RED, YELLOW, DIM};
+use crate::check_file_authority;
 
 //=== mount guard ===//
 struct MountGuard {
     mounts: Vec<PathBuf>,
-    merged: PathBuf, // this is the effective root (overlay or original root)
+    merged: PathBuf,
+    is_overlay: bool,
 }
 
 impl MountGuard {
-    /// `root` = sys_path (ONYX_DIR/sys/<name>)
-    /// `uid`  = Some(user_id) to enable per-user overlay, None = no overlay
-    fn new(root: &Path, uid: Option<&str>) -> Result<Self, String> {
+    /// `root` = sys_path (ONYX_DIR/sys/<system_name>)
+    /// `uid`  = user id
+    /// `system_name` = e.g., "debian", "alpine"
+    fn new(root: &Path, uid: Option<&str>, system_name: &str) -> Result<Self, String> {
+        let mut is_overlay = false;
+        
         let merged = if let Some(uid) = uid {
-            // setup overlayfs dirs
-            let base = root.parent().unwrap().parent().unwrap().join("delta").join(uid);
+            is_overlay = true;
+            
+            // NEW PATH LOGIC: ONYX_DIR/delta/<uid>/<system_name>/...
+            // this prevents different OSs from sharing the same 'upper' layer
+            let base = ONYX_DIR.join("delta").join(uid).join(system_name);
             let upper = base.join("upper");
             let work  = base.join("work");
             let merged = base.join("merged");
@@ -33,58 +44,60 @@ impl MountGuard {
                     .map_err(|e| format!("failed to create {}: {}", d.display(), e))?;
             }
 
-            // mount overlayfs
             let opts = format!(
                 "lowerdir={},upperdir={},workdir={}",
                 root.display(),
                 upper.display(),
                 work.display()
             );
+            
             run("mount", &["-t", "overlay", "overlay", "-o", &opts, merged.to_str().unwrap()])?;
 
             merged
         } else {
-            // no overlay, use root directly
             root.to_path_buf()
         };
 
         let mut mounts = Vec::new();
 
-        // make / private
+        // -- make / private to avoid mount leakage to host --
         run("mount", &["--make-rprivate", "/"])?;
 
-        // bind mounts inside merged
-        let proc = merged.join("proc");
-        let sys  = merged.join("sys");
-        let dev  = merged.join("dev");
-        let pts  = merged.join("dev/pts");
+        // bind mounts logic (proc, dev, sys)
+        let binds = vec![
+            ("proc", "proc", vec![]),
+            ("/dev", "dev", vec!["--bind"]),
+            ("/dev/pts", "dev/pts", vec!["--bind"]),
+            ("/sys", "sys", vec!["--bind"]),
+        ];
 
-        // proc
-        std::fs::create_dir_all(&proc).map_err(|e| e.to_string())?;
-        run("mount", &["-t", "proc", "proc", proc.to_str().unwrap()])?;
-        mounts.push(proc);
+        for (src, dest_rel, args) in binds {
+            let dest = merged.join(dest_rel);
+            std::fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+            
+            // convert to string once so we don't keep fighting the borrow checker
+            let dest_str = dest.to_str().ok_or("invalid path")?.to_string();
+            
+            let mut cmd_args = args.clone();
+            cmd_args.push(src);
+            cmd_args.push(&dest_str);
+            
+            run("mount", &cmd_args)?;
+            
+            // extra hardening for /sys and /dev using our string reference
+            if dest_rel == "sys" {
+                run("mount", &["-o", "remount,ro,bind", &dest_str])?;
+            }
+            if dest_rel == "dev" {
+                run("mount", &["--make-slave", &dest_str])?;
+            }
 
-        // dev
-        std::fs::create_dir_all(&dev).map_err(|e| e.to_string())?;
-        run("mount", &["--bind", "/dev", dev.to_str().unwrap()])?;
-        run("mount", &["--make-slave", dev.to_str().unwrap()])?;
-        mounts.push(dev.clone());
+            // NOW we move it. once it's in the vector, 'dest' is gone.
+            mounts.push(dest);
+        }
 
-        // dev/pts
-        std::fs::create_dir_all(&pts).map_err(|e| e.to_string())?;
-        run("mount", &["--bind", "/dev/pts", pts.to_str().unwrap()])?;
-        mounts.push(pts);
-
-        // sys (bind + remount ro)
-        std::fs::create_dir_all(&sys).map_err(|e| e.to_string())?;
-        run("mount", &["--bind", "/sys", sys.to_str().unwrap()])?;
-        run("mount", &["-o", "remount,ro", sys.to_str().unwrap()])?;
-        mounts.push(sys);
-
-        Ok(Self { mounts, merged })
+        Ok(Self { mounts, merged, is_overlay })
     }
-
-    /// the root to chroot into (merged overlay or original root)
     fn root(&self) -> &Path {
         &self.merged
     }
@@ -92,28 +105,15 @@ impl MountGuard {
 
 impl Drop for MountGuard {
     fn drop(&mut self) {
-        // first, unmount overlay
-        if self.merged.exists() {
-            let _ = Command::new("umount")
-                .arg("-l")
-                .arg(&self.merged)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
-
-        // unmount bind mounts in reverse order
+        // 1. reverse unmount children (pts -> dev -> sys -> proc)
         for m in self.mounts.iter().rev() {
-            let _ = Command::new("umount")
-                .arg("-l")
-                .arg(m)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
+            let _ = Command::new("umount").arg("-l").arg(m).status();
         }
 
-        // now remove merged mountpoint only
-        if self.merged.exists() {
+        // 2. unmount the overlay itself
+        if self.is_overlay {
+            let _ = Command::new("umount").arg("-l").arg(&self.merged).status();
+            // 3. clean up the MERGED mountpoint directory
             let _ = std::fs::remove_dir(&self.merged);
         }
     }
@@ -241,10 +241,129 @@ pub fn cmd(args: Vec<String>) {
         "list" => {
             list();
         }
+        "apply-delta" => {
+            let perms = check_file_authority(&ONYX_DIR).unwrap();
+            if perms.0 == true || perms.1 == true {
+                let name = args.get(3).expect("error: missing <name>");
+                let system = args.get(4).expect("error: missing <system>");
+                apply_delta(name, system).expect("failed to execute merge");
+            } else {
+                errln("box", "this user cannot edit the rootfs.");
+            }
+        }
         _ => {
             errln("box", &format!("unknown box command: {}", args[2]));
         }
     }
+}
+
+fn apply_delta(username: &str, system_name: &str) -> io::Result<()> {
+    // 1. get current real UID as a baseline
+    let current_uid = nix::unistd::getuid().as_raw().to_string();
+
+    // 2. resolve the target UID
+    let uid = if username == "self" || username == "" {
+        current_uid
+    } else if let Ok(Some(user)) = User::from_name(username) {
+        user.uid.as_raw().to_string()
+    } else if let Ok(val) = std::env::var("SUDO_UID") {
+        val // we are in sudo, use the caller's ID
+    } else if username.chars().all(|c| c.is_numeric()) {
+        username.to_string() // user just passed "1000"
+    } else {
+        // final straw: check if the username matches the current user's name
+        // (sometimes from_name fails but we know who we are)
+        let current_user_name = std::env::var("USER").unwrap_or_default();
+        if username == current_user_name {
+            current_uid
+        } else {
+            // we really can't find it
+            return Err(io::Error::new(io::ErrorKind::NotFound, "user lookup failed completely"));
+        }
+    };
+    
+    // 2. build paths based on system
+    // assuming your structure is: onyx/sys/<system_name>
+    let brick_path = ONYX_DIR.join("sys").join(system_name);
+    let delta_path = ONYX_DIR.join("delta").join(&uid).join(&system_name).join("upper");
+
+    // 3. sanity checks
+    if !brick_path.exists() {
+        errln("box", format!("system brick '{}' not found at {}", system_name, brick_path.display()).as_str());
+        return Ok(());
+    }
+
+    if !delta_path.exists() {
+        errln("box", format!("no delta found for user {} at {}", username, delta_path.display()).as_str());
+        return Ok(());
+    }
+
+    // 4. the "no turning back" confirmation
+    println!("{YELLOW}⚠ PERMANENT MERGE:{ESC} user '{}' -> system '{}'", username, system_name);
+    print!("{BLUE}[box]{ESC} this will overwrite files in {}. confirm? [y/N]: ", system_name);
+    io::stdout().flush()?;
+    
+    let mut input = String::new();
+    io::stdin().read_line(&mut input)?;
+
+    if input.trim().to_lowercase() != "y" {
+        infoln("box", "merge aborted by user.");
+        return Ok(());
+    }
+
+    infoln("box", format!("committing delta to {}...", system_name).as_str());
+
+    // 1. handle removals (whiteouts) FIRST
+    // we do this before rsync so we don't copy whiteout devices into the brick
+    for entry in WalkDir::new(&delta_path).into_iter().filter_map(|e| e.ok()) {
+        let path = entry.path();
+        let metadata = entry.metadata()?;
+
+        // fuse-overlayfs uses character devices with 0/0 as whiteouts
+        if metadata.file_type().is_char_device() {
+            let relative_path = path.strip_prefix(&delta_path).map_err(|_| {
+                io::Error::new(io::ErrorKind::Other, "path prefix mismatch")
+            })?;
+            let target_in_brick = brick_path.join(relative_path);
+            
+            if target_in_brick.exists() {
+                println!("{DIM}[box] dbg:{ESC} removing whiteout: {}", target_in_brick.display());
+                let target_meta = fs::symlink_metadata(&target_in_brick)?;
+                if target_meta.is_dir() {
+                    fs::remove_dir_all(&target_in_brick)?;
+                } else {
+                    fs::remove_file(&target_in_brick)?;
+                }
+            }
+        }
+    }
+
+    // 2. sync additions and modifications
+    let status = Command::new("rsync")
+        .arg("-a")
+        .arg("-v")
+        .arg("--ignore-times")
+        .arg(format!("{}/", delta_path.display()))
+        .arg(&brick_path)
+        .status()?;
+
+    if status.success() {
+        infoln("box", "merge complete. cleaning up delta folder...");
+        
+        // nuke the whole system-specific delta dir (upper + work)
+        // delta_path is .../delta/UID/SYSTEM/upper -> parent is .../delta/UID/SYSTEM/
+        if let Some(system_delta_root) = delta_path.parent() {
+            if let Err(e) = fs::remove_dir_all(system_delta_root) {
+                errln("box", format!("failed to nuke delta dir: {}", e).as_str());
+            }
+        }
+        
+        infoln("box", "delta flushed. system is now updated.");
+    } else {
+        errln("box", "rsync failed! brick might be in a partial state.");
+    }
+
+    Ok(())
 }
 
 fn list() {
@@ -361,7 +480,7 @@ fn exec(args: Vec<String>) {
 
         // define paths
         let uid_str = geteuid().as_raw().to_string();
-        let delta_dir = ONYX_DIR.join("delta").join(&uid_str);
+        let delta_dir = ONYX_DIR.join("delta").join(&uid_str).join(&args[3]);
         let upper = delta_dir.join("upper");
         let work = delta_dir.join("work");
         let merged = delta_dir.join("merged");
@@ -370,28 +489,39 @@ fn exec(args: Vec<String>) {
         let use_overlay = !is_android || has_fuse;
 
         if use_overlay {
-            infoln("box", "running via proot + fuse-overlayfs");
-            
+            infoln("box", "launching namespaced session with proot...");
+
             for dir in [&upper, &work, &merged] {
                 fs::create_dir_all(dir).unwrap();
             }
 
             let fuse_bin = ONYX_DIR.join("bin/fuse-overlayfs");
-            let mut fuse_cmd = Command::new(&fuse_bin);
-            let fuse_status = fuse_cmd
-                .arg("-o")
-                .arg(format!(
-                    "lowerdir={},upperdir={},workdir={}",
-                    sys_path.to_str().unwrap(),
-                    upper.to_str().unwrap(),
-                    work.to_str().unwrap()
-                ))
-                .arg(&merged)
-                .status()
-                .expect("failed to start fuse-overlayfs");
+            let proot_bin = ONYX_DIR.join("bin/proot");
+            let shell = "/bin/bash"; // or use your find_shell logic
 
-            if !fuse_status.success() {
-                errln("box", "fuse-overlayfs failed, falling back to standalone mode...");
+            // we build one giant command string that unshare executes
+            // 1. mount the fuse layer
+            // 2. run proot pointing to the newly merged layer
+            let chain_cmd = format!(
+                "{} -f -o lowerdir={},upperdir={},workdir={},squash_to_root {} & sleep 1 && {} -r {} -0 -b /dev -b /proc -b /sys --link2symlink -w / {} -c {}",
+                fuse_bin.display(),
+                sys_path.display(),
+                upper.display(),
+                work.display(),
+                merged.display(),
+                proot_bin.display(),
+                merged.display(),
+                shell,
+                strcommand
+            );
+
+            let status = Command::new("unshare")
+                .args(&["-U", "-r", "-m", "bash", "-c", &chain_cmd])
+                .status()
+                .expect("failed to execute namespaced chain");
+
+            if !status.success() {
+                errln("box", "session failed, falling back...");
                 let proot_bin = ONYX_DIR.join("bin/proot");
                 let shell = find_shell(&sys_path);
                 
@@ -402,29 +532,9 @@ fn exec(args: Vec<String>) {
                     .arg("--link2symlink")
                     .arg("-w").arg("/")
                     .arg(shell)
-                    .arg("-c")
-                    .arg(strcommand)
                     .status()
                     .expect("failed to run proot");
-                return;
             }
-            let proot_bin = ONYX_DIR.join("bin/proot");
-            let shell = find_shell(&merged);
-            
-            Command::new(proot_bin)
-                .arg("-r").arg(&merged)
-                .arg("-0")
-                .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
-                .arg("--link2symlink")
-                .arg("-w").arg("/")
-                .arg(shell)
-                .arg("-c")
-                .arg(strcommand)
-                .status()
-                .expect("failed to run proot");
-
-            // cleanup
-            Command::new("fusermount").arg("-u").arg(&merged).status().ok();
         } else {
             infoln("box", "android detected: using standalone mode (no delta)");
             let proot_bin = ONYX_DIR.join("bin/proot");
@@ -437,8 +547,6 @@ fn exec(args: Vec<String>) {
                 .arg("--link2symlink")
                 .arg("-w").arg("/")
                 .arg(shell)
-                .arg("-c")
-                .arg(strcommand)
                 .status()
                 .expect("failed to run proot");
         }
@@ -462,7 +570,7 @@ fn exec(args: Vec<String>) {
     }
 
     // RAII mount guard
-    let guard = match MountGuard::new(&sys_path, Some(&geteuid().to_string())) {
+    let guard = match MountGuard::new(&sys_path, Some(&geteuid().to_string()), &args[3]) {
         Ok(m) => m,
         Err(e) => {
             errln("box", &e);
@@ -530,7 +638,7 @@ fn open(args: Vec<String>) {
 
         // define paths
         let uid_str = geteuid().as_raw().to_string();
-        let delta_dir = ONYX_DIR.join("delta").join(&uid_str);
+        let delta_dir = ONYX_DIR.join("delta").join(&uid_str).join(&args[3]);
         let upper = delta_dir.join("upper");
         let work = delta_dir.join("work");
         let merged = delta_dir.join("merged");
@@ -539,37 +647,40 @@ fn open(args: Vec<String>) {
         let use_overlay = !is_android || has_fuse;
 
         if use_overlay {
-            infoln("box", "running via proot + fuse-overlayfs");
-            
+            infoln("box", "launching namespaced session with proot...");
+
             for dir in [&upper, &work, &merged] {
                 fs::create_dir_all(dir).unwrap();
             }
 
             let fuse_bin = ONYX_DIR.join("bin/fuse-overlayfs");
-            let mut fuse_cmd = Command::new(&fuse_bin);
-            let fuse_status = fuse_cmd
-                .arg("-o")
-                .arg(format!(
-                    "lowerdir={},upperdir={},workdir={}",
-                    sys_path.to_str().unwrap(),
-                    upper.to_str().unwrap(),
-                    work.to_str().unwrap()
-                ))
-                .arg(&merged)
+            let proot_bin = ONYX_DIR.join("bin/proot");
+            let shell = "/bin/bash"; // or use your find_shell logic
+
+            // we build one giant command string that unshare executes
+            // 1. mount the fuse layer
+            // 2. run proot pointing to the newly merged layer
+            let chain_cmd = format!(
+                "{} -f -o lowerdir={},upperdir={},workdir={},squash_to_root {} & sleep 1 && {} -r {} -0 -b /dev -b /proc -b /sys --link2symlink -w / {}",
+                fuse_bin.display(),
+                sys_path.display(),
+                upper.display(),
+                work.display(),
+                merged.display(),
+                proot_bin.display(),
+                merged.display(),
+                shell
+            );
+
+            let status = Command::new("unshare")
+                .args(&["-U", "-r", "-m", "bash", "-c", &chain_cmd])
                 .status()
-                .expect("failed to start fuse-overlayfs");
+                .expect("failed to execute namespaced chain");
 
-            if !fuse_status.success() {
-                errln("box", "fuse-overlayfs failed, falling back to standalone mode...");
-                // if fuse fails, we fall through to the standalone logic
+            if !status.success() {
+                errln("box", "session failed, falling back...");
                 run_standalone_proot(&sys_path);
-                return;
             }
-
-            run_proot_session(&merged);
-
-            // cleanup
-            Command::new("fusermount").arg("-u").arg(&merged).status().ok();
         } else {
             infoln("box", "android detected: using standalone mode (no delta)");
             run_standalone_proot(&sys_path);
@@ -594,7 +705,7 @@ fn open(args: Vec<String>) {
     }
 
     // RAII mount guard
-    let guard = match MountGuard::new(&sys_path, Some(&geteuid().to_string())) {
+    let guard = match MountGuard::new(&sys_path, Some(&geteuid().to_string()), &args[3]) {
         Ok(m) => m,
         Err(e) => {
             errln("box", &e);
