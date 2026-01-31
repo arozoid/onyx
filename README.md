@@ -7,7 +7,7 @@
 
 ## Core Features
 
-v0.1.1:
+v0.1.3:
 
 * **Portability:** Onyx is a ~2MB binary that handles everything, like updates, box management, and performance profiles.
 * **Unprivileged Execution:** Native support for `proot` to provide guest-side root simulation without host-side `sudo`.
@@ -16,6 +16,7 @@ v0.1.1:
 * **Optimized:** Compiled binary size optimized for 32mb (and less!) ramdisk environments.
 * **Host-agnostic:** Runs on any Linux kernel that supports basic namespaces or `proot`! (latest officially supported: kernel 4.14)
 * **Mount Safe:** Uses unshared and guarded private mounts for Onyx box execution.
+* **Layers:** Use overlayfs layers to both keep your main rootfs pristine, allow for multiple users to use one rootfs, and apply your changes whenever!
 
 ---
 
@@ -34,9 +35,9 @@ onyx box open my-box
 
 ## uninstall onyx
 # linux
-rm -rf /home/onyx
+rm -rf /home/onyx && sed -i '/onyx/d' ~/.bashrc && sudo rm /usr/local/bin/onyx
 # termux
-rm -rf $HOME/.onyx
+rm -rf $HOME/onyx && sed -i '/onyx/d' ~/.bashrc && sudo rm /data/data/com.termux/files/usr/local/bin/onyx
 ```
 
 ---
@@ -44,4 +45,3 @@ rm -rf $HOME/.onyx
 ## Coming Soon
 
 * `onyx lux`: An API for users to create plugins (daemons, autostarts, and much more), extensions (subcommands of modules), and user modules (fully fledged custom content)!
-* **Layers:** Use multiple layers to keep your main rootfs safe!
