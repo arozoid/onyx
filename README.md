@@ -33,7 +33,10 @@ onyx box create my-box ./linux-rootfs FALSE
 onyx box open my-box
 
 ## uninstall onyx
+# linux
 rm -rf /home/onyx
+# termux
+rm -rf $HOME/.onyx
 ```
 
 ---
