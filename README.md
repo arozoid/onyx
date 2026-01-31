@@ -7,7 +7,7 @@
 
 ## Core Features
 
-v0.1.3:
+v0.2.0:
 
 * **Portability:** Onyx is a ~2MB binary that handles everything, like updates, box management, and performance profiles.
 * **Unprivileged Execution:** Native support for `proot` to provide guest-side root simulation without host-side `sudo`.
