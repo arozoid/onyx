@@ -18,7 +18,7 @@ echo -e "${VIOLET}  ___  _  _ __   ____  __"
 echo " / _ \| \| |\ \ / /\ \/ /"
 echo "| (_) | .  | \ V /  >  < "
 echo " \___/|_|\_|  |_|  /_/\_\\"
-echo -e "                          ${CLR}${VIOLET}v0.1.2${CLR}"
+echo -e "                          ${CLR}${VIOLET}v0.1.3${CLR}"
 
 # environment detection
 if [ -n "$TERMUX_VERSION" ]; then

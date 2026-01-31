@@ -294,6 +294,26 @@ fn list() {
     }
 }
 
+// helper to keep the main block clean
+fn run_proot_session(root_path: &Path) {
+    let proot_bin = ONYX_DIR.join("bin/proot");
+    let shell = find_shell(root_path);
+    
+    Command::new(proot_bin)
+        .arg("-r").arg(root_path)
+        .arg("-0")
+        .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
+        .arg("--link2symlink")
+        .arg("-w").arg("/")
+        .arg(shell)
+        .status()
+        .expect("failed to run proot");
+}
+
+fn run_standalone_proot(sys_path: &Path) {
+    // on android, sys_path should be a writable copy of the rootfs
+    run_proot_session(sys_path);
+}
 
 fn exec(args: Vec<String>) {
     if args.len() < 4 {
@@ -315,6 +335,8 @@ fn exec(args: Vec<String>) {
         return;
     }
 
+    let strcommand = command.join(" ");
+
     let mut prof = String::new();
     for arg in args.clone() {
         if let Some(profile) = arg.strip_prefix("--profile=") {
@@ -334,36 +356,92 @@ fn exec(args: Vec<String>) {
     }
 
     if !rooted() {
-        infoln("box", "running as normal user via proot");
+        let is_android = std::env::var("PREFIX").map(|s| s.contains("com.termux")).unwrap_or(false);
+        let has_fuse = std::path::Path::new("/dev/fuse").metadata().is_ok();
 
-        let proot_bin = ONYX_DIR.join("bin/proot");
-        if !proot_bin.exists() {
-            errln("box", "proot binary not found!");
-            return;
+        // define paths
+        let uid_str = geteuid().as_raw().to_string();
+        let delta_dir = ONYX_DIR.join("delta").join(&uid_str);
+        let upper = delta_dir.join("upper");
+        let work = delta_dir.join("work");
+        let merged = delta_dir.join("merged");
+
+        // we only attempt the fuse dance if we aren't on android OR if /dev/fuse is miraculously open
+        let use_overlay = !is_android || has_fuse;
+
+        if use_overlay {
+            infoln("box", "running via proot + fuse-overlayfs");
+            
+            for dir in [&upper, &work, &merged] {
+                fs::create_dir_all(dir).unwrap();
+            }
+
+            let fuse_bin = ONYX_DIR.join("bin/fuse-overlayfs");
+            let mut fuse_cmd = Command::new(&fuse_bin);
+            let fuse_status = fuse_cmd
+                .arg("-o")
+                .arg(format!(
+                    "lowerdir={},upperdir={},workdir={}",
+                    sys_path.to_str().unwrap(),
+                    upper.to_str().unwrap(),
+                    work.to_str().unwrap()
+                ))
+                .arg(&merged)
+                .status()
+                .expect("failed to start fuse-overlayfs");
+
+            if !fuse_status.success() {
+                errln("box", "fuse-overlayfs failed, falling back to standalone mode...");
+                let proot_bin = ONYX_DIR.join("bin/proot");
+                let shell = find_shell(&sys_path);
+                
+                Command::new(proot_bin)
+                    .arg("-r").arg(&sys_path)
+                    .arg("-0")
+                    .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
+                    .arg("--link2symlink")
+                    .arg("-w").arg("/")
+                    .arg(shell)
+                    .arg("-c")
+                    .arg(strcommand)
+                    .status()
+                    .expect("failed to run proot");
+                return;
+            }
+            let proot_bin = ONYX_DIR.join("bin/proot");
+            let shell = find_shell(&merged);
+            
+            Command::new(proot_bin)
+                .arg("-r").arg(&merged)
+                .arg("-0")
+                .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
+                .arg("--link2symlink")
+                .arg("-w").arg("/")
+                .arg(shell)
+                .arg("-c")
+                .arg(strcommand)
+                .status()
+                .expect("failed to run proot");
+
+            // cleanup
+            Command::new("fusermount").arg("-u").arg(&merged).status().ok();
+        } else {
+            infoln("box", "android detected: using standalone mode (no delta)");
+            let proot_bin = ONYX_DIR.join("bin/proot");
+            let shell = find_shell(&sys_path);
+            
+            Command::new(proot_bin)
+                .arg("-r").arg(&sys_path)
+                .arg("-0")
+                .arg("-b").arg("/dev").arg("-b").arg("/proc").arg("-b").arg("/sys")
+                .arg("--link2symlink")
+                .arg("-w").arg("/")
+                .arg(shell)
+                .arg("-c")
+                .arg(strcommand)
+                .status()
+                .expect("failed to run proot");
         }
-
-        // turn args into string
-        let strcommand = command.join(" ");
-
-        infoln("box", format!("executing box command: {}", strcommand).as_str());
-
-        let mut cmd = Command::new(proot_bin);
-        cmd
-            .env_clear() // kill everything termux gave us
-            .env("HOME", "/root")
-            .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
-            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
-            .arg("-r").arg(&sys_path)
-            .arg("-0")
-            .arg("-b").arg("/dev")
-            .arg("-b").arg("/proc")
-            .arg("-b").arg("/sys")
-            .arg("-w").arg("/")
-            .arg("--link2symlink")
-            .arg(strcommand)
-            .status()
-            .expect("failed to run proot");
         return;
     }
 
@@ -391,8 +469,6 @@ fn exec(args: Vec<String>) {
             return;
         }
     };
-
-    let strcommand = command.join(" ");
 
     let shell = find_shell(&sys_path);
     infoln("box", &format!("executing box command: {}", strcommand));
@@ -449,74 +525,55 @@ fn open(args: Vec<String>) {
     }
 
     if !rooted() {
-        infoln("box", "running as normal user via proot + fuse-overlayfs");
+        let is_android = std::env::var("PREFIX").map(|s| s.contains("com.termux")).unwrap_or(false);
+        let has_fuse = std::path::Path::new("/dev/fuse").metadata().is_ok();
 
-        let proot_bin = ONYX_DIR.join("bin/proot");
-        let fuse_bin = ONYX_DIR.join("bin/fuse-overlayfs"); // fresh from the roster!
-
-        if !proot_bin.exists() || !fuse_bin.exists() {
-            errln("box", "required binaries (proot/fuse-overlayfs) missing!");
-            return;
-        }
-
+        // define paths
         let uid_str = geteuid().as_raw().to_string();
         let delta_dir = ONYX_DIR.join("delta").join(&uid_str);
         let upper = delta_dir.join("upper");
         let work = delta_dir.join("work");
         let merged = delta_dir.join("merged");
 
-        for dir in [&upper, &work, &merged] {
-            fs::create_dir_all(dir).unwrap();
+        // we only attempt the fuse dance if we aren't on android OR if /dev/fuse is miraculously open
+        let use_overlay = !is_android || has_fuse;
+
+        if use_overlay {
+            infoln("box", "running via proot + fuse-overlayfs");
+            
+            for dir in [&upper, &work, &merged] {
+                fs::create_dir_all(dir).unwrap();
+            }
+
+            let fuse_bin = ONYX_DIR.join("bin/fuse-overlayfs");
+            let mut fuse_cmd = Command::new(&fuse_bin);
+            let fuse_status = fuse_cmd
+                .arg("-o")
+                .arg(format!(
+                    "lowerdir={},upperdir={},workdir={}",
+                    sys_path.to_str().unwrap(),
+                    upper.to_str().unwrap(),
+                    work.to_str().unwrap()
+                ))
+                .arg(&merged)
+                .status()
+                .expect("failed to start fuse-overlayfs");
+
+            if !fuse_status.success() {
+                errln("box", "fuse-overlayfs failed, falling back to standalone mode...");
+                // if fuse fails, we fall through to the standalone logic
+                run_standalone_proot(&sys_path);
+                return;
+            }
+
+            run_proot_session(&merged);
+
+            // cleanup
+            Command::new("fusermount").arg("-u").arg(&merged).status().ok();
+        } else {
+            infoln("box", "android detected: using standalone mode (no delta)");
+            run_standalone_proot(&sys_path);
         }
-
-        // 1. mount the fuse overlay
-        // we use -o lowerdir,upperdir,workdir and the crucial 'userxattr'
-        let mut fuse_cmd = Command::new(&fuse_bin);
-        let fuse_status = fuse_cmd
-            .arg("-o")
-            .arg(format!(
-                "lowerdir={},upperdir={},workdir={}",
-                sys_path.to_str().unwrap(),
-                upper.to_str().unwrap(),
-                work.to_str().unwrap()
-            ))
-            .arg(&merged)
-            .status()
-            .expect("failed to start fuse-overlayfs");
-
-        if !fuse_status.success() {
-            errln("box", "fuse-overlayfs mount failed! check /dev/fuse permissions.");
-            return;
-        }
-
-        let shell = find_shell(&merged); // shell is now inside the merged view
-
-        // 2. run proot pointing to the MERGED folder as root
-        let mut cmd = Command::new(proot_bin);
-        cmd
-            .env_clear()
-            .env("HOME", "/root")
-            .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
-            .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-            .arg("-r").arg(&merged) // <-- THIS is the magic
-            .arg("-0")
-            .arg("-b").arg("/dev")
-            .arg("-b").arg("/proc")
-            .arg("-b").arg("/sys")
-            .arg("-w").arg("/")
-            .arg("--link2symlink")
-            .arg(shell)
-            .status()
-            .expect("failed to run proot");
-
-        // 3. cleanup: unmount when done so we don't leave zombie mounts
-        Command::new("fusermount")
-            .arg("-u")
-            .arg(&merged)
-            .status()
-            .ok();
-
-        infoln("box", "exited box and unmounted delta");
         return;
     }
 

@@ -6,7 +6,7 @@ use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.3 RC 1";
+pub const VERSION: &str = "v0.1.3";
 
 //=== helpers ===//
 fn parse_mem_line(line: &str) -> u64 {
@@ -24,7 +24,7 @@ fn get_kernel() -> (String, bool) {
             .arg("-r")
             .output()
             .unwrap_or_else(|_| -> std::process::Output {
-              errln("doctor", "panic! failed to get kernel from any method! defaulting to 4.18");
+              errln("doctor", "panic! failed to get kernel from any method! defaulting to 4.14");
               let c = Command::new("echo")
                 .arg("4.18-??-generic (failed to fetch kernel)")
                 .output()
@@ -111,7 +111,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String, bool) {
     // cleanup "6.8.0-88-generic" to just "6.8.0"
     let version_num = version_part.split('-').next().unwrap_or("");
 
-    let target = "4.18";
+    let target = "4.14";
 
     //=== software vars ===//
     let latest_version = fetch("https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/version.txt");
@@ -240,6 +240,13 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String, bool) {
         println!("    {YELLOW}[onyxit]{ESC} not installed");
     }
 
+    #[cfg(not(target_os = "android"))]
+    if fuse_overlay {
+        println!("    {GREEN}[fuse-overlayfs]{ESC} running with fuse-overlayfs, normal users have their own deltas");
+    } else {
+        println!("    {YELLOW}[fuse-overlayfs]{ESC} rootfs may not operate properly after normalization; consider using 'onyx update'");
+    }
+
     let root = rooted();
     
     if root {
@@ -276,6 +283,9 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String, bool) {
         println!("    {DIM}[glibc]{ESC} not required on x86_64");
     }
 
+    #[cfg(target_os = "android")]
+    println!("    {DIM}[fuse-overlayfs] unusable on android{ESC}");
+
     if arch == "aarch64" {
       match (box64, proot, glibc, root) {
           (true, true, true, true) | (true, false, true, true) | (true, true, true, false) => {
@@ -311,6 +321,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String, bool) {
           }
       }
     }
+
     println!();
 
     (kv, mv, root, box64, proot, glibc, arch, latest_version.to_string(), fuse_overlay)
