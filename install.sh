@@ -65,11 +65,15 @@ done
 echo -e "${CYAN}fetching latest binary...${CLR}"
 # detecting architecture for the release header
 ARCH=$(uname -m)
-case $ARCH in
-    x86_64)  URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-x86_64" ;;
-    aarch64) URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64" ;;
-    *)       URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64" ;;
-esac
+if [ -n "$TERMUX_VERSION" ]; then
+    URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-android-aarch64"
+else
+    case $(uname -m) in
+        x86_64)  URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-x86_64" ;;
+        aarch64) URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64" ;;
+        *)       URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64" ;;
+    esac
+fi
 
 # dummy download (replace with curl -L "$URL" -o "$ONYX_DIR/bin/onyx")
 # using -L because redirects are the only way to hit "latest"
