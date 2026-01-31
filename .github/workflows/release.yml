@@ -32,9 +32,10 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: install musl tools
-        if: contains(matrix.target, 'musl')
-        run: sudo apt-get update && sudo apt-get install -y musl-tools
+      - name: install cross-compilation tools
+        uses: taiki-e/setup-cross-toolchain-action@v1
+        with:
+          target: ${{ matrix.target }}
 
       - name: setup android ndk
         if: ${{ matrix.use_ndk }}
