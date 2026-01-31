@@ -54,7 +54,7 @@ PROFILES="cinderblock performant balanced limited bounded potato brick"
 for P in $PROFILES; do
     TARGET_FILE="$ONYX_DIR/profiles/$P.toml"
     if [ ! -f "$TARGET_FILE" ]; then
-        echo "  -> fetching $P..."
+        echo "  => fetching $P..."
         URL="https://raw.githubusercontent.com/arozoid/onyx/main/profiles/$P.toml"
         # ensure directory exists just in case
         mkdir -p "$ONYX_DIR/profiles"
