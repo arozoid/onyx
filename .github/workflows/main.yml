@@ -44,7 +44,9 @@ jobs:
       - name: install cargo-ndk (host tool)
         if: ${{ matrix.use_ndk }}
         # we run this with a cleared environment to stop it from thinking it's an android
-        run: cargo install cargo-ndk --locked
+        run: |
+          unset CARGO_BUILD_TARGET
+          cargo install cargo-ndk --locked
 
       - name: build optimized binary
         run: |
