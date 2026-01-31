@@ -51,23 +51,13 @@ jobs:
       - name: build optimized binary
         run: |
           if [ "${{ matrix.use_ndk }}" = "true" ]; then
-            # now we just use the tool we just installed
             cargo ndk -t aarch64-linux-android build --release
-            mv target/aarch64-linux-android/release/onyx ${{ matrix.name }}
+            # specifically grab from the android subfolder
+            cp target/aarch64-linux-android/release/onyx ./${{ matrix.name }}
           else
             cargo build --release --target ${{ matrix.target }}
-            mv target/${{ matrix.target }}/release/onyx ${{ matrix.name }}
-          fi
-      - name: build optimized binary
-        # using cargo-ndk for the android build to handle the linkers automatically
-        run: |
-          if [ "${{ matrix.use_ndk }}" = "true" ]; then
-            cargo install cargo-ndk
-            cargo ndk -t aarch64-linux-android build --release
-            mv target/aarch64-linux-android/release/onyx ${{ matrix.name }}
-          else
-            cargo build --release --target ${{ matrix.target }}
-            mv target/${{ matrix.target }}/release/onyx ${{ matrix.name }}
+            # use cp instead of mv to avoid "same file" errors during retries
+            cp target/${{ matrix.target }}/release/onyx ./${{ matrix.name }}
           fi
 
       - name: strip symbols (keep it < 1mb)
