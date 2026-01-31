@@ -119,7 +119,7 @@ pub fn apply_profile_cpu(profile: &Profile) {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Profile {
     pub name: String,
     pub description: Option<String>,
@@ -186,7 +186,7 @@ impl Profile {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(tag = "type")]
 pub enum MemoryConfig {
     #[serde(rename = "unlimited")]
@@ -199,7 +199,7 @@ pub enum MemoryConfig {
     Fixed { mb: u64 },
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct CpuConfig {
     pub cores: usize,
 }

@@ -105,11 +105,14 @@ fn limit_box(profile: String) {
         memory: MemoryConfig::Unlimited,
         cpu: None,
     };
-    let binding;
+    let mut binding;
     let prof;
     if profile == String::new() {
         binding = load_profiles(ONYX_DIR.join("profiles").as_path()).expect("failed to fetch profiles");
-        prof = binding.get(read_current_profile().unwrap().as_str()).unwrap_or(&backup);
+        binding.insert("__backup__".to_string(), backup.clone());
+        prof = binding
+            .get(read_current_profile().unwrap_or_else(|| "__backup__".to_string()).as_str())
+            .unwrap_or_else(|| &backup);
     } else if profile == "__backup__".to_string() {
         prof = &backup;
     } else {
@@ -260,7 +263,7 @@ fn exec(args: Vec<String>) {
     if prof.len() > 0 {
         limit_box(prof);
     } else {
-        prof = read_current_profile().expect("failed to obtain 'current-profile'");
+        prof = read_current_profile().unwrap_or("__backup__".to_string());
         if prof.len() > 0 {
             limit_box(prof);
         } else {
@@ -282,18 +285,21 @@ fn exec(args: Vec<String>) {
 
         infoln("box", format!("executing box command: {}", strcommand).as_str());
 
-        let mut cmd = Command::new("env");
-        cmd.arg("-u").arg("LD_PRELOAD")
-        .arg(proot_bin)
-        .arg("-r").arg(&sys_path)
-        .arg("-0")
-        .arg("-b").arg("/dev")
-        .arg("-b").arg("/proc")
-        .arg("-b").arg("/sys")
-        .arg("-w").arg("/")
-        .args(command)
-        .status()
-        .expect("failed to run proot");
+        let mut cmd = Command::new(proot_bin);
+        cmd
+            .arg("-r").arg(&sys_path)
+            .arg("-0")
+            .arg("-b").arg("/dev")
+            .arg("-b").arg("/proc")
+            .arg("-b").arg("/sys")
+            .arg("-w").arg("/")
+            .arg(strcommand)
+            // env handling
+            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
+            .env("PATH", "/usr/bin")
+            .env_remove("LD_PRELOAD")
+            .status()
+            .expect("failed to run proot");
         return;
     }
 
@@ -358,7 +364,7 @@ fn open(args: Vec<String>) {
     if prof.len() > 0 {
         limit_box(prof);
     } else {
-        prof = read_current_profile().expect("failed to obtain 'current-profile'");
+        prof = read_current_profile().unwrap_or("__backup__".to_string());
         if prof.len() > 0 {
             limit_box(prof);
         } else {
@@ -388,6 +394,7 @@ fn open(args: Vec<String>) {
             .arg("-w").arg("/")
             .arg(shell)
             // env handling
+            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
             .env("PATH", "/usr/bin")
             .env_remove("LD_PRELOAD")
             .status()
