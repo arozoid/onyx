@@ -1,12 +1,10 @@
-name: release-onyx
+name: build-onyx
 
 on:
   push:
-    tags:
-      - 'v*'
-
-permissions:
-  contents: write
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 jobs:
   build:
@@ -43,7 +41,6 @@ jobs:
           ndk-version: r25c
 
       - name: build optimized binary
-        # using cargo-ndk for the android build to handle the linkers automatically
         run: |
           if [ "${{ matrix.use_ndk }}" = "true" ]; then
             cargo install cargo-ndk
@@ -57,8 +54,9 @@ jobs:
       - name: strip symbols (keep it < 1mb)
         run: strip ${{ matrix.name }} || echo "strip failed, continuing..."
 
-      - name: upload assets
-        uses: softprops/action-gh-release@v1
+      - name: upload brute binaries
+        uses: actions/upload-artifact@v4
         with:
-          files: ${{ matrix.name }}
-          generate_release_notes: true
+          name: ${{ matrix.name }}
+          path: ${{ matrix.name }}
+          retention-days: 5
