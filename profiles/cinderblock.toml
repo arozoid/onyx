@@ -1,0 +1,10 @@
+name = "cinderblock"
+description = "congratulations. you have achieved true cinderblock"
+nice = 19
+
+[memory]
+type = "fixed"
+mb = 16
+
+[cpu]
+cores = 1

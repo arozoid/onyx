@@ -1,0 +1,10 @@
+name = "bounded"
+description = "Hard limits. Enough for a lightweight desktop and browser."
+nice = 15
+
+[memory]
+type = "fixed"
+mb = 1024
+
+[cpu]
+cores = 2

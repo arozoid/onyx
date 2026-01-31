@@ -1,0 +1,7 @@
+name = "balanced"
+description = "Balanced limits. Heavy tasks won't freeze the host."
+nice = 5
+
+[memory]
+type = "percent"
+value = 75

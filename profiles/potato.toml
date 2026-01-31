@@ -1,0 +1,10 @@
+name = "potato"
+description = "Very high restrictions. Just enough for basic programs."
+nice = 19
+
+[memory]
+type = "fixed"
+mb = 256
+
+[cpu]
+cores = 1

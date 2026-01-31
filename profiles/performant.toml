@@ -1,0 +1,6 @@
+name = "performant"
+description = "No restrictions. Full system performance."
+nice = 0
+
+[memory]
+type = "unlimited"

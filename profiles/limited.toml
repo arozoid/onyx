@@ -1,0 +1,10 @@
+name = "limited"
+description = "Decently limited. Won't hog much memory or CPU."
+nice = 10
+
+[memory]
+type = "percent"
+value = 50
+
+[cpu]
+cores = 2

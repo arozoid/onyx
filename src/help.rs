@@ -51,6 +51,9 @@ fn sub_cmd(args: Vec<String>) {
 
                 ("open <name>\n --profile=PROFILE".to_string(), 
                 "Open an Onyx box in the terminal".to_string()),
+
+                ("exec <name>\n --profile=PROFILE".to_string(), 
+                "Execute a single command within the Onyx box".to_string()),
                 
                 ("create <name> <rootfs-folder>\n <move: TRUE/FALSE>".to_string(), 
                 "Create a new Onyx box from an existing rootfs".to_string()),

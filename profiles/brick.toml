@@ -1,0 +1,10 @@
+name = "brick"
+description = "Bare minimum. Just enough to run basic commands. Not for much else."
+nice = 19
+
+[memory]
+type = "fixed"
+mb = 64
+
+[cpu]
+cores = 1
