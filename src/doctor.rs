@@ -6,7 +6,7 @@ use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.1.3 (build 26w05a)";
+pub const VERSION: &str = "v0.1.3 RC 1";
 
 //=== helpers ===//
 fn parse_mem_line(line: &str) -> u64 {
@@ -24,9 +24,9 @@ fn get_kernel() -> (String, bool) {
             .arg("-r")
             .output()
             .unwrap_or_else(|_| -> std::process::Output {
-              errln("doctor", "panic! failed to get kernel from any method! defaulting to 4.14");
+              errln("doctor", "panic! failed to get kernel from any method! defaulting to 4.18");
               let c = Command::new("echo")
-                .arg("4.14-??-generic (failed to fetch kernel)")
+                .arg("4.18-??-generic (failed to fetch kernel)")
                 .output()
                 .unwrap();
               c
@@ -72,7 +72,7 @@ fn is_version_higher(current: &str, target: &str) -> bool {
 }
 
 //=== cli ===//
-pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
+pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String, bool) {
     infoln("doctor", "fetching info");
 
     //=== system vars ===//
@@ -111,7 +111,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     // cleanup "6.8.0-88-generic" to just "6.8.0"
     let version_num = version_part.split('-').next().unwrap_or("");
 
-    let target = "4.14";
+    let target = "4.18";
 
     //=== software vars ===//
     let latest_version = fetch("https://raw.githubusercontent.com/arozoid/onyx/refs/heads/main/version.txt");
@@ -122,6 +122,7 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     let box64 = file_exists("/home/onyx/box64/");
     let proot = file_exists("/home/onyx/bin/proot");
     let glibc = file_exists("/home/onyx/glibc/");
+    let fuse_overlay = file_exists("/home/onyx/bin/fuse-overlayfs");
 
     let onyxit = file_exists("/home/onyx/bin/core/onyxit");
 
@@ -312,5 +313,5 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String) {
     }
     println!();
 
-    (kv, mv, root, box64, proot, glibc, arch, latest_version.to_string())
+    (kv, mv, root, box64, proot, glibc, arch, latest_version.to_string(), fuse_overlay)
 }

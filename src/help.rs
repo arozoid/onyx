@@ -104,11 +104,20 @@ fn sub_cmd(args: Vec<String>) {
         "doctor" => {
             println!("{BLUE}usage:{ESC}");
             println!("  onyx doctor\n");
+            println!();
+            println!("Gives a system diagnostic.");
         }
         "help" => {
             println!("{BLUE}usage:{ESC}");
             println!("  onyx help <module>");
             println!("  onyx help");
+            println!();
+            println!("Displays a help message.");
+        }
+        "normalize" => {
+            infoln("usage", "onyx normalize");
+            println!();
+            println!("Normalizes the file permissions of $ONYX_DIR and its children to be more secure.");
         }
         _ => {
             errln("onyx", format!("unknown module: {} {DIM}[{}]{ESC}", args[1], time_get()).as_str());
@@ -118,7 +127,7 @@ fn sub_cmd(args: Vec<String>) {
 
 pub fn cmd(args: Vec<String>) {
     // header 1
-    println!("{BLUE}[onyx]{ESC} v0.1.3 {DIM}(build 26w05a){ESC}");
+    println!("{BLUE}[onyx]{ESC} v0.1.3 {DIM}(RC 1){ESC}");
 
     if args.len() > 2 {
         sub_cmd(args);
@@ -133,6 +142,7 @@ pub fn cmd(args: Vec<String>) {
         ("box".to_string(), "Manage Onyx boxes".to_string()),
         ("update".to_string(), "Update Onyx and its components to the latest version".to_string()),
         ("profile".to_string(), "Set performance profiles for Onyx boxes".to_string()),
+        ("normalize".to_string(), "Fix Onyx file permissions for security".to_string()),
         ("doctor".to_string(), "Diagnose Onyx installation".to_string()),
         ("help".to_string(), "Show this help message".to_string()),
         // ("lux", "Manage Onyx extensions and plugins"),

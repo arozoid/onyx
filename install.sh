@@ -90,5 +90,5 @@ chmod +x "$ONYX_DIR/bin/core/onyx"
 echo "=================================="
 echo -e "${BOLD}onyx is now installed.${CLR}"
 echo -e "run: ${CYAN}export PATH=\$PATH:$ONYX_DIR/bin/core${CLR}"
-echo -e "then: ${CYAN}onyx box create my-box /path/to/rootfs FALSE${CLR}"
+#echo -e "then: ${CYAN}onyx normalize${CLR}"
 

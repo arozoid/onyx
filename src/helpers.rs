@@ -5,6 +5,9 @@ use std::path::PathBuf;
 use std::fs;
 use nix::unistd::Uid;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::fs::MetadataExt;
+use std::path::Path;
+use nix::unistd::geteuid;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use once_cell::sync::Lazy;
@@ -71,6 +74,38 @@ pub static ONYX_DIR: Lazy<PathBuf> = Lazy::new(|| {
 });
 
 //=== helper funcs ===//
+pub fn check_file_authority(path: &Path) -> std::io::Result<(bool, bool, bool)> {
+    let metadata = fs::symlink_metadata(path)?;
+    let file_uid = metadata.uid();
+    let file_mode = metadata.mode();
+
+    let euid = geteuid().as_raw(); // effective UID
+
+    let is_root = euid == 0;
+    let is_owner = euid == file_uid;
+
+    // check write permission for owner/group/other
+    let can_write = if is_root {
+        true // root can write anything
+    } else {
+        let write_bit_owner = 0o200;
+        let write_bit_group = 0o020;
+        let write_bit_other = 0o002;
+
+        if is_owner && (file_mode & write_bit_owner != 0) {
+            true
+        } else if metadata.gid() == nix::unistd::getegid().as_raw() && (file_mode & write_bit_group != 0) {
+            true
+        } else if file_mode & write_bit_other != 0 {
+            true
+        } else {
+            false
+        }
+    };
+
+    Ok((is_root, is_owner, can_write))
+}
+
 pub fn set_nice(nice_level: i32) -> io::Result<()> {
     // unsafe because nice is a libc syscall
     let prev = unsafe { libc::nice(nice_level) };

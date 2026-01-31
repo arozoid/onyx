@@ -1,4 +1,5 @@
 mod lux;
+mod normalize;
 mod r#box;
 mod helpers;
 mod doctor;
@@ -7,7 +8,8 @@ mod update;
 mod cpu;
 mod profile;
 
-use crate::helpers::{errln};
+use crate::helpers::{ONYX_DIR, check_file_authority};
+use crate::helpers::{errln, infoln};
 
 use std::env;
 use std::process;
@@ -39,6 +41,15 @@ fn main() {
         }
         "profile" => {
             profile::cmd(args);
+        }
+        "normalize" => {
+            let perms = check_file_authority(&ONYX_DIR).unwrap();
+            if perms.0 == true || perms.1 == true {
+                infoln("doctor", "normalizing onyx file permissions...");
+                normalize::normalize_onyx_dir().unwrap();
+            } else {
+                errln("doctor", "this user cannot normalize onyx.");
+            }
         }
         _ => {
             errln("onyx", &format!("unknown command: {}", command));

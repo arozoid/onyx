@@ -2,7 +2,9 @@ use std::process::Command;
 use std::path::{Path, PathBuf};
 use std::fs;
 use std::time::{UNIX_EPOCH};
+use std::process::Stdio;
 
+use nix::unistd::geteuid;
 use nix::sched::{self, CloneFlags};
 use dir_size;
 
@@ -12,47 +14,107 @@ use crate::helpers::{errln, BLUE, ESC, infoln, rooted, ONYX_DIR, BLUEB, set_nice
 //=== mount guard ===//
 struct MountGuard {
     mounts: Vec<PathBuf>,
+    merged: PathBuf, // this is the effective root (overlay or original root)
 }
 
 impl MountGuard {
-    fn new(root: &Path) -> Result<Self, String> {
+    /// `root` = sys_path (ONYX_DIR/sys/<name>)
+    /// `uid`  = Some(user_id) to enable per-user overlay, None = no overlay
+    fn new(root: &Path, uid: Option<&str>) -> Result<Self, String> {
+        let merged = if let Some(uid) = uid {
+            // setup overlayfs dirs
+            let base = root.parent().unwrap().parent().unwrap().join("delta").join(uid);
+            let upper = base.join("upper");
+            let work  = base.join("work");
+            let merged = base.join("merged");
+
+            for d in [&upper, &work, &merged] {
+                std::fs::create_dir_all(d)
+                    .map_err(|e| format!("failed to create {}: {}", d.display(), e))?;
+            }
+
+            // mount overlayfs
+            let opts = format!(
+                "lowerdir={},upperdir={},workdir={}",
+                root.display(),
+                upper.display(),
+                work.display()
+            );
+            run("mount", &["-t", "overlay", "overlay", "-o", &opts, merged.to_str().unwrap()])?;
+
+            merged
+        } else {
+            // no overlay, use root directly
+            root.to_path_buf()
+        };
+
         let mut mounts = Vec::new();
 
-        // make / private to avoid propagation back to host (best-effort)
+        // make / private
         run("mount", &["--make-rprivate", "/"])?;
 
-        let proc = root.join("proc");
-        let sys  = root.join("sys");
-        let dev  = root.join("dev");
-        let pts  = root.join("dev/pts");
+        // bind mounts inside merged
+        let proc = merged.join("proc");
+        let sys  = merged.join("sys");
+        let dev  = merged.join("dev");
+        let pts  = merged.join("dev/pts");
 
         // proc
+        std::fs::create_dir_all(&proc).map_err(|e| e.to_string())?;
         run("mount", &["-t", "proc", "proc", proc.to_str().unwrap()])?;
         mounts.push(proc);
 
         // dev
+        std::fs::create_dir_all(&dev).map_err(|e| e.to_string())?;
         run("mount", &["--bind", "/dev", dev.to_str().unwrap()])?;
-        // make it slave so it won't propagate to other mounts in this ns
         run("mount", &["--make-slave", dev.to_str().unwrap()])?;
         mounts.push(dev.clone());
 
         // dev/pts
+        std::fs::create_dir_all(&pts).map_err(|e| e.to_string())?;
         run("mount", &["--bind", "/dev/pts", pts.to_str().unwrap()])?;
         mounts.push(pts);
 
-        // sys (bind then remount ro)
+        // sys (bind + remount ro)
+        std::fs::create_dir_all(&sys).map_err(|e| e.to_string())?;
         run("mount", &["--bind", "/sys", sys.to_str().unwrap()])?;
         run("mount", &["-o", "remount,ro", sys.to_str().unwrap()])?;
         mounts.push(sys);
 
-        Ok(Self { mounts })
+        Ok(Self { mounts, merged })
+    }
+
+    /// the root to chroot into (merged overlay or original root)
+    fn root(&self) -> &Path {
+        &self.merged
     }
 }
 
 impl Drop for MountGuard {
     fn drop(&mut self) {
+        // first, unmount overlay
+        if self.merged.exists() {
+            let _ = Command::new("umount")
+                .arg("-l")
+                .arg(&self.merged)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+
+        // unmount bind mounts in reverse order
         for m in self.mounts.iter().rev() {
-            let _ = Command::new("umount").arg(m).status();
+            let _ = Command::new("umount")
+                .arg("-l")
+                .arg(m)
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .status();
+        }
+
+        // now remove merged mountpoint only
+        if self.merged.exists() {
+            let _ = std::fs::remove_dir(&self.merged);
         }
     }
 }
@@ -322,7 +384,7 @@ fn exec(args: Vec<String>) {
     }
 
     // RAII mount guard
-    let _mounts = match MountGuard::new(&sys_path) {
+    let guard = match MountGuard::new(&sys_path, Some(&geteuid().to_string())) {
         Ok(m) => m,
         Err(e) => {
             errln("box", &e);
@@ -332,9 +394,21 @@ fn exec(args: Vec<String>) {
 
     let strcommand = command.join(" ");
 
+    let shell = find_shell(&sys_path);
     infoln("box", &format!("executing box command: {}", strcommand));
-
-    match Command::new("chroot").arg(&sys_path).args(command).status() {
+    
+    match Command::new("chroot")
+    .env_clear() // kill everything termux gave us
+    .env("HOME", "/root")
+    .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+    .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
+    .arg(guard.root())       // chroot root = merged overlay
+    .arg(shell)              // run the shell
+    .arg("-c")               // execute a single command
+    .arg(strcommand)         // the command to run
+    .env_remove("LD_PRELOAD")
+    .status()
+    {
         Ok(_) => {}, // command finished, ignore exit code
         Err(e) => errln("box", &format!("chroot failed: {}", e)),
     }
@@ -375,25 +449,56 @@ fn open(args: Vec<String>) {
     }
 
     if !rooted() {
-        infoln("box", "running as normal user via proot");
+        infoln("box", "running as normal user via proot + fuse-overlayfs");
 
         let proot_bin = ONYX_DIR.join("bin/proot");
-        if !proot_bin.exists() {
-            errln("box", "proot binary not found!");
+        let fuse_bin = ONYX_DIR.join("bin/fuse-overlayfs"); // fresh from the roster!
+
+        if !proot_bin.exists() || !fuse_bin.exists() {
+            errln("box", "required binaries (proot/fuse-overlayfs) missing!");
             return;
         }
 
-        let shell = find_shell(&sys_path);
-        infoln("box", format!("entering box with {shell}").as_str());
-        
+        let uid_str = geteuid().as_raw().to_string();
+        let delta_dir = ONYX_DIR.join("delta").join(&uid_str);
+        let upper = delta_dir.join("upper");
+        let work = delta_dir.join("work");
+        let merged = delta_dir.join("merged");
+
+        for dir in [&upper, &work, &merged] {
+            fs::create_dir_all(dir).unwrap();
+        }
+
+        // 1. mount the fuse overlay
+        // we use -o lowerdir,upperdir,workdir and the crucial 'userxattr'
+        let mut fuse_cmd = Command::new(&fuse_bin);
+        let fuse_status = fuse_cmd
+            .arg("-o")
+            .arg(format!(
+                "lowerdir={},upperdir={},workdir={}",
+                sys_path.to_str().unwrap(),
+                upper.to_str().unwrap(),
+                work.to_str().unwrap()
+            ))
+            .arg(&merged)
+            .status()
+            .expect("failed to start fuse-overlayfs");
+
+        if !fuse_status.success() {
+            errln("box", "fuse-overlayfs mount failed! check /dev/fuse permissions.");
+            return;
+        }
+
+        let shell = find_shell(&merged); // shell is now inside the merged view
+
+        // 2. run proot pointing to the MERGED folder as root
         let mut cmd = Command::new(proot_bin);
         cmd
-            .env_clear() // kill everything termux gave us
+            .env_clear()
             .env("HOME", "/root")
             .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
             .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
-            .env("PROOT_TMP_DIR", &format!("{}/tmp", ONYX_DIR.to_str().unwrap()))
-            .arg("-r").arg(&sys_path)
+            .arg("-r").arg(&merged) // <-- THIS is the magic
             .arg("-0")
             .arg("-b").arg("/dev")
             .arg("-b").arg("/proc")
@@ -404,8 +509,14 @@ fn open(args: Vec<String>) {
             .status()
             .expect("failed to run proot");
 
-        
-        infoln("box", "exited box");
+        // 3. cleanup: unmount when done so we don't leave zombie mounts
+        Command::new("fusermount")
+            .arg("-u")
+            .arg(&merged)
+            .status()
+            .ok();
+
+        infoln("box", "exited box and unmounted delta");
         return;
     }
 
@@ -426,7 +537,7 @@ fn open(args: Vec<String>) {
     }
 
     // RAII mount guard
-    let _mounts = match MountGuard::new(&sys_path) {
+    let guard = match MountGuard::new(&sys_path, Some(&geteuid().to_string())) {
         Ok(m) => m,
         Err(e) => {
             errln("box", &e);
@@ -434,17 +545,19 @@ fn open(args: Vec<String>) {
         }
     };
 
-    let shell = find_shell(&sys_path);
+    let shell = find_shell(guard.root());
 
     infoln("box", &format!("entering box with {}", shell));
 
     #[cfg(target_os = "android")]
     match Command::new("chroot")
-        .arg(&sys_path)
-        .arg(shell)
-        // env isolation
-        .env("PATH", "/usr/bin")
+        .env_clear() // kill everything termux gave us
+        .env("HOME", "/root")
+        .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+        .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         .env_remove("LD_PRELOAD")
+        .arg(guard.root())
+        .arg(shell)
         .status()
     {
         Ok(_) => {} // shell finished, ignore exit code
@@ -453,10 +566,13 @@ fn open(args: Vec<String>) {
 
     #[cfg(not(target_os = "android"))]
     match Command::new("chroot")
-        .arg(&sys_path)
-        .arg(shell)
-        // env isolation
+        .env_clear() // kill everything termux gave us
+        .env("HOME", "/root")
+        .env("TERM", std::env::var("TERM").unwrap_or_else(|_| "xterm-256color".to_string()))
+        .env("PATH", "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin")
         .env_remove("LD_PRELOAD")
+        .arg(guard.root())
+        .arg(shell)
         .status()
     {
         Ok(_) => {} // shell finished, ignore exit code
