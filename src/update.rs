@@ -32,9 +32,9 @@ pub fn cmd(args: Vec<String>) {
     {
         infoln("onyx", "updating onyx...");
         if arch == "aarch64" {
-            download("https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64", ONYX_DIR.join("onyx").to_str().unwrap()).unwrap();
+            download("https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64", ONYX_DIR.join("bin/core/onyx").to_str().unwrap()).unwrap();
         } else {
-            download("https://github.com/arozoid/onyx/releases/latest/download/onyx-x86_64", ONYX_DIR.join("onyx").to_str().unwrap()).unwrap();
+            download("https://github.com/arozoid/onyx/releases/latest/download/onyx-x86_64", ONYX_DIR.join("bin/core/onyx").to_str().unwrap()).unwrap();
         }
         Command::new("chmod")
                 .args(["+x", ONYX_DIR.join("onyx").to_str().unwrap()])

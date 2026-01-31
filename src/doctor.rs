@@ -6,7 +6,7 @@ use std::fs;
 use std::process::Command;
 
 //=== variables ===//
-pub const VERSION: &str = "v0.2.1";
+pub const VERSION: &str = "v0.2.2";
 
 //=== helpers ===//
 fn parse_mem_line(line: &str) -> u64 {
