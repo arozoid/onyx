@@ -43,6 +43,21 @@ jobs:
         with:
           ndk-version: r25c
 
+      - name: install cargo-ndk (host tool)
+        if: ${{ matrix.use_ndk }}
+        # we run this with a cleared environment to stop it from thinking it's an android
+        run: cargo install cargo-ndk --locked
+
+      - name: build optimized binary
+        run: |
+          if [ "${{ matrix.use_ndk }}" = "true" ]; then
+            # now we just use the tool we just installed
+            cargo ndk -t aarch64-linux-android build --release
+            mv target/aarch64-linux-android/release/onyx ${{ matrix.name }}
+          else
+            cargo build --release --target ${{ matrix.target }}
+            mv target/${{ matrix.target }}/release/onyx ${{ matrix.name }}
+          fi
       - name: build optimized binary
         # using cargo-ndk for the android build to handle the linkers automatically
         run: |
