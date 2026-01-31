@@ -49,22 +49,25 @@ mkdir -p "$ONYX_DIR/sys" \
 # 2. install performance profiles
 echo -e "${CYAN}grabbing performance profiles...${CLR}"
 
-# the brute list of profiles from your repo
 PROFILES="cinderblock performant balanced limited bounded potato brick"
 
 for P in $PROFILES; do
-    if [ ! -f "$ONYX_DIR/profiles/$P.toml" ]; then
-        echo "  => fetching $P profile..."
-        # pull from your github structure
+    TARGET_FILE="$ONYX_DIR/profiles/$P.toml"
+    if [ ! -f "$TARGET_FILE" ]; then
+        echo "  -> fetching $P..."
         URL="https://raw.githubusercontent.com/arozoid/onyx/main/profiles/$P.toml"
-        curl -sL "$URL" -o "$ONYX_DIR/profiles/$P.toml" || echo "${RED}     ! failed to fetch $P${CLR}"
+        # ensure directory exists just in case
+        mkdir -p "$ONYX_DIR/profiles"
+        curl -fsSL "$URL" -o "$TARGET_FILE" || echo -e "${RED}     ! failed to fetch $P${CLR}"
     fi
 done
 
 # 3. fetching the soul (v0.1.1 binary)
 echo -e "${CYAN}fetching latest binary...${CLR}"
-# detecting architecture for the release header
-ARCH=$(uname -m)
+
+# ensure the 'core' directory exists
+mkdir -p "$ONYX_DIR/bin/core"
+
 if [ -n "$TERMUX_VERSION" ]; then
     URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-android-aarch64"
 else
@@ -74,6 +77,10 @@ else
         *)       URL="https://github.com/arozoid/onyx/releases/latest/download/onyx-aarch64" ;;
     esac
 fi
+
+# download to the specific core bin
+curl -fsSL "$URL" -o "$ONYX_DIR/bin/core/onyx"
+chmod +x "$ONYX_DIR/bin/core/onyx"
 
 # dummy download (replace with curl -L "$URL" -o "$ONYX_DIR/bin/onyx")
 # using -L because redirects are the only way to hit "latest"
@@ -86,16 +93,6 @@ fi
 echo -e "${CYAN}unlocking the gates...${CLR}"
 chmod -R 777 "$ONYX_DIR"
 chmod +x "$ONYX_DIR/bin/onyx"
-
-# 5. seeding the first profile
-if [ ! -f "$ONYX_DIR/profiles/default.toml" ]; then
-    cat <<EOF > "$ONYX_DIR/profiles/default.toml"
-[profile]
-name = "default"
-max_memory = "32mb"
-cpu_shares = 512
-EOF
-fi
 
 echo "=================================="
 echo -e "${BOLD}onyx is now installed.${CLR}"
