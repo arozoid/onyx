@@ -30,8 +30,8 @@ v0.1.0 focuses on the fundamental "muscle" of the system:
 
 ```bash
 # create a new box environment
-onyx create my-box ./linux-rootfs
+onyx create my-box ./linux-rootfs FALSE
 
 # launch the environment
-onyx run my-box
+onyx open my-box
 ```
