@@ -1,6 +1,6 @@
 use crate::cpu;
 
-use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, file_exists, infoln, rooted, BLUEB, fetch};
+use crate::helpers::{errln, BLUE, DIM, ESC, RED, GREEN, YELLOW, file_exists, infoln, rooted, BLUEB, fetch, ONYX_DIR};
 
 use std::fs;
 use std::process::Command;
@@ -119,12 +119,12 @@ pub fn cmd() -> (bool, i32, bool, bool, bool, bool, String, String, bool) {
         .as_deref()
         .unwrap_or("");
 
-    let box64 = file_exists("/home/onyx/box64/");
-    let proot = file_exists("/home/onyx/bin/proot");
-    let glibc = file_exists("/home/onyx/glibc/");
-    let fuse_overlay = file_exists("/home/onyx/bin/fuse-overlayfs");
+    let box64 = file_exists(ONYX_DIR.join("box64").to_str().unwrap());
+    let proot = file_exists(ONYX_DIR.join("bin/proot").to_str().unwrap());
+    let glibc = file_exists(ONYX_DIR.join("glibc").to_str().unwrap());
+    let fuse_overlay = file_exists(ONYX_DIR.join("bin/fuse-overlayfs").to_str().unwrap());
 
-    let onyxit = file_exists("/home/onyx/bin/core/onyxit");
+    let onyxit = file_exists(ONYX_DIR.join("bin/core/onyxit").to_str().unwrap());
 
     println!("{BLUEB}[>== onyx doctor ==<]{ESC}");
 
